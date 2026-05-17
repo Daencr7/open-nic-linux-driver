@@ -1,0 +1,1 @@
+/* Mailbox header common for VF and PF */
