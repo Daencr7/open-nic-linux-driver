@@ -14,6 +14,43 @@
 # The full GNU General Public License is included in this distribution in
 # the file called "COPYING".
 #
+# ifdef KVERSION
+# KERNEL_VERS = $(KVERSION)
+# else
+# KERNEL_VERS = $(shell uname -r)
+# endif
+
+# srcdir = $(PWD)
+# obj-m += onic.o
+# BASE_OBJS := $(patsubst $(srcdir)/%.c,%.o,$(wildcard $(srcdir)/*.c $(srcdir)/*/*.c $(srcdir)/*/*/*.c))
+# onic-objs = $(BASE_OBJS)
+# ccflags-y = -O3 -Wall -Werror -I$(srcdir)/qdma_access -I$(srcdir)/hwmon -I$(srcdir)
+
+# KDIR ?= /lib/modules/$(KERNEL_VERS)/build
+
+# all:
+# 	make -C $(KDIR) M=$(PWD) modules
+
+# with-clang:
+# 	make CC=clang -C $(KDIR) M=$(PWD) modules
+	
+# clean:
+# 	make -C $(KDIR) M=$(PWD) clean
+# 	rm -f *.o.ur-safe
+# 	rm -f ./qdma_access/*.o.ur-safe
+
+# install:
+# 	rm -f /lib/modules/$(KERNEL_VERS)/onic.ko
+# 	cp onic.ko /lib/modules/$(KERNEL_VERS)
+# 	depmod
+
+# uninstall:
+# 	rm -f /lib/modules/$(KERNEL_VERS)/onic.ko
+# 	depmod
+
+
+# ****************************************************************
+
 ifdef KVERSION
 KERNEL_VERS = $(KVERSION)
 else
@@ -21,27 +58,36 @@ KERNEL_VERS = $(shell uname -r)
 endif
 
 srcdir = $(PWD)
+BUILDDIR ?= $(srcdir)/build
+
 obj-m += onic.o
+
 BASE_OBJS := $(patsubst $(srcdir)/%.c,%.o,$(wildcard $(srcdir)/*.c $(srcdir)/*/*.c $(srcdir)/*/*/*.c))
+
 onic-objs = $(BASE_OBJS)
-ccflags-y = -O3 -Wall -Werror -I$(srcdir)/qdma_access -I$(srcdir)/hwmon -I$(srcdir)
+
+ccflags-y = -O3 -Wall -Werror \
+	-I$(srcdir)/qdma_access \
+	-I$(srcdir)/hwmon \
+	-I$(srcdir)
 
 KDIR ?= /lib/modules/$(KERNEL_VERS)/build
 
 all:
-	make -C $(KDIR) M=$(PWD) modules
+	mkdir -p $(BUILDDIR)
+	make -C $(KDIR) M=$(srcdir) MO=$(BUILDDIR) modules
 
 with-clang:
-	make CC=clang -C $(KDIR) M=$(PWD) modules
-	
+	mkdir -p $(BUILDDIR)
+	make CC=clang -C $(KDIR) M=$(srcdir) MO=$(BUILDDIR) modules
+
 clean:
-	make -C $(KDIR) M=$(PWD) clean
-	rm -f *.o.ur-safe
-	rm -f ./qdma_access/*.o.ur-safe
+	make -C $(KDIR) M=$(srcdir) MO=$(BUILDDIR) clean
+	rm -rf $(BUILDDIR)
 
 install:
 	rm -f /lib/modules/$(KERNEL_VERS)/onic.ko
-	cp onic.ko /lib/modules/$(KERNEL_VERS)
+	cp $(BUILDDIR)/onic.ko /lib/modules/$(KERNEL_VERS)
 	depmod
 
 uninstall:
