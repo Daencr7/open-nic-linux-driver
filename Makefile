@@ -101,7 +101,8 @@ else
 KERNEL_VERS = $(shell uname -r)
 endif
 
-srcdir := $(CURDIR)
+# srcdir := $(CURDIR) # for laptop
+srcdir := $(PWD) # access for linux kernel server
 BUILDDIR ?= $(srcdir)/build
 KDIR ?= /lib/modules/$(KERNEL_VERS)/build
 

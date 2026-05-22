@@ -35,7 +35,7 @@
 
 #ifndef ONIC_VF
 #define DRV_STR "OpenNIC Linux Kernel Driver"
-char onic_drv_name[] = "onic";
+char onic_drv_name[] = "onic_pf";
 #else
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
 char onic_drv_name[] = "open-nic-vf";

@@ -17,7 +17,7 @@
 #include <linux/bpf.h>
 
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
-char onic_drv_name[] = "open-nic-vf";
+char onic_drv_name[] = "onic_vf";
 #define DRV_VER "0.21"
 const char onic_drv_str[] = DRV_STR;
 const char onic_drv_ver[] = DRV_VER;
