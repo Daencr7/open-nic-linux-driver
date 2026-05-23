@@ -73,33 +73,47 @@ static const struct pci_device_id onic_vf_pci_tbl[] = {
 
 MODULE_DEVICE_TABLE(pci, onic_vf_pci_tbl);
 
-static int onic_vf_probe(struct pci_dev *pdev, const struct pci_device_id *ent){
-    return 0;
+static int onic_vf_probe(struct pci_dev *pdev,
+			 const struct pci_device_id *ent)
+{
+	int err;
+
+	dev_info(&pdev->dev, "OpenNIC VF probe start\n");
+
+	err = pci_enable_device(pdev);
+	if (err)
+		return err;
+
+	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	if (err) {
+		err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+		if (err)
+			goto err_disable_device;
+	}
+
+	err = pci_request_mem_regions(pdev, onic_drv_name);
+	if (err)
+		goto err_disable_device;
+
+	pci_set_master(pdev);
+
+	pci_set_drvdata(pdev, NULL);
+
+	dev_info(&pdev->dev, "OpenNIC VF probe success\n");
+	return 0;
+
+err_disable_device:
+	pci_disable_device(pdev);
+	return err;
 }
+
 
 static void onic_vf_remove(struct pci_dev *pdev)
 {
-#ifdef CMS_SUPPORT
-        static int xmc_remove=0;
-#endif
-    // struct onic_private *priv = pci_get_drvdata(pdev);
-    // unregister_netdev(priv->netdev);
-    // onic_clear_interrupt(priv);
-    // onic_clear_hardware(priv);
-    // onic_clear_capacity(priv);
-    // free_netdev(priv->netdev);
-    // pci_set_drvdata(pdev, NULL);
-    // pci_release_mem_regions(pdev);
-    // pci_disable_device(pdev);
+	dev_info(&pdev->dev, "OpenNIC VF remove\n");
 
-#ifdef CMS_SUPPORT
-        /* Support XMC sensors (lm-sensors) */
-        if(xmc_remove == 0)
-        {
-             xocl_fini_xmc();
-            xmc_remove=1;
-        }
-#endif
+	pci_release_mem_regions(pdev);
+	pci_disable_device(pdev);
 }
 
 static struct pci_driver onic_vf_pci_driver = {
