@@ -76,41 +76,108 @@ MODULE_DEVICE_TABLE(pci, onic_vf_pci_tbl);
 static int onic_vf_probe(struct pci_dev *pdev,
 			 const struct pci_device_id *ent)
 {
+	struct net_device *netdev;
+	struct onic_private *priv;
 	int err;
 
 	dev_info(&pdev->dev, "OpenNIC VF probe start\n");
 
-	err = pci_enable_device(pdev);
-	if (err)
+	err = pci_enable_device_mem(pdev);
+	if (err) {
+		dev_err(&pdev->dev, "pci_enable_device_mem failed: %d\n", err);
 		return err;
+	}
 
 	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 	if (err) {
 		err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
-		if (err)
+		if (err) {
+			dev_err(&pdev->dev, "DMA mask setup failed: %d\n", err);
 			goto err_disable_device;
+		}
 	}
 
 	err = pci_request_mem_regions(pdev, onic_drv_name);
-	if (err)
+	if (err) {
+		dev_err(&pdev->dev, "pci_request_mem_regions failed: %d\n", err);
 		goto err_disable_device;
+	}
 
 	pci_set_master(pdev);
 
-	pci_set_drvdata(pdev, NULL);
+	netdev = alloc_etherdev_mq(sizeof(struct onic_private), 1);
+	if (!netdev) {
+		err = -ENOMEM;
+		goto err_release_regions;
+	}
 
-	dev_info(&pdev->dev, "OpenNIC VF probe success\n");
+	SET_NETDEV_DEV(netdev, &pdev->dev);
+
+	priv = netdev_priv(netdev);
+	memset(priv, 0, sizeof(*priv));
+
+	priv->pdev = pdev;
+	priv->netdev = netdev;
+
+	pci_set_drvdata(pdev, priv);
+
+	/*
+	 * Tạm thời VF chưa init datapath thật.
+	 * Sau này sẽ thêm:
+	 * - map BAR
+	 * - init mailbox
+	 * - request qbase/qmax từ PF
+	 * - init TX/RX queue
+	 */
+
+	eth_hw_addr_random(netdev);
+
+	/*
+	 * Nếu bạn đã có VF netdev_ops thì mở dòng này:
+	 *
+	 * netdev->netdev_ops = &onic_vf_netdev_ops;
+	 */
+
+	err = register_netdev(netdev);
+	if (err) {
+		dev_err(&pdev->dev, "register_netdev failed: %d\n", err);
+		goto err_free_netdev;
+	}
+
+	dev_info(&pdev->dev, "OpenNIC VF probe success, netdev=%s\n",
+		 netdev->name);
+
 	return 0;
+
+err_free_netdev:
+	pci_set_drvdata(pdev, NULL);
+	free_netdev(netdev);
+
+err_release_regions:
+	pci_release_mem_regions(pdev);
 
 err_disable_device:
 	pci_disable_device(pdev);
+
 	return err;
 }
 
 
 static void onic_vf_remove(struct pci_dev *pdev)
 {
+	struct onic_private *priv = pci_get_drvdata(pdev);
+
 	dev_info(&pdev->dev, "OpenNIC VF remove\n");
+
+	if (priv) {
+		if (priv->netdev)
+			unregister_netdev(priv->netdev);
+
+		pci_set_drvdata(pdev, NULL);
+
+		if (priv->netdev)
+			free_netdev(priv->netdev);
+	}
 
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
