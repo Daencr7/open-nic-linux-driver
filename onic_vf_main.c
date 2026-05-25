@@ -15,6 +15,7 @@
 #include <linux/netdevice.h>
 #include <linux/moduleparam.h>
 #include <linux/bpf.h>
+#include "onic.h"
 
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
 char onic_drv_name[] = "onic_vf";

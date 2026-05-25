@@ -54,9 +54,9 @@ onic_vf-objs := \
 # Compiler flags
 # =========================================================
 ccflags-y := -O3 -Wall -Werror
-ccflags-y += -I$(srcdir)
-ccflags-y += -I$(srcdir)/qdma_access
-ccflags-y += -I$(srcdir)/hwmon
+ccflags-y += -I$(src)
+ccflags-y += -I$(src)/qdma_access
+ccflags-y += -I$(src)/hwmon
 
 # =========================================================
 # Build
