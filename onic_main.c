@@ -359,7 +359,6 @@ static int onic_sriov_configure(struct pci_dev *pdev, int num_vfs)
 	if (!test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
 		return -EINVAL;
 /* Tạm định nghĩa cho ONIC_MAX_VFS */
-#define ONIC_MAX_VFS 4
 	if (num_vfs < 0 || num_vfs > ONIC_MAX_VFS)
 		return -EINVAL;
 

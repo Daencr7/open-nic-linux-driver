@@ -78,7 +78,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 			 const struct pci_device_id *ent)
 {
 	struct net_device *netdev;
-	struct onic_private *priv;
+	// struct onic_private *priv;
 	int err;
 
 	dev_info(&pdev->dev, "OpenNIC VF probe start\n");
@@ -106,22 +106,22 @@ static int onic_vf_probe(struct pci_dev *pdev,
 
 	pci_set_master(pdev);
 
-	netdev = alloc_etherdev_mq(sizeof(struct onic_private), 1);
-	if (!netdev) {
-		err = -ENOMEM;
-		goto err_release_regions;
-	}
+	// netdev = alloc_etherdev_mq(sizeof(struct onic_private), 1);
+	// if (!netdev) {
+	// 	err = -ENOMEM;
+	// 	goto err_release_regions;
+	// }
 
-	SET_NETDEV_DEV(netdev, &pdev->dev);
+	// SET_NETDEV_DEV(netdev, &pdev->dev);
 
-	priv = netdev_priv(netdev);
-	memset(priv, 0, sizeof(*priv));
+	// priv = netdev_priv(netdev);
+	// memset(priv, 0, sizeof(*priv));
 
-	priv->pdev = pdev;
-	priv->netdev = netdev;
+	// priv->pdev = pdev;
+	// priv->netdev = netdev;
 
-	pci_set_drvdata(pdev, priv);
-
+	// pci_set_drvdata(pdev, priv);
+	pci_set_drvdata(pdev, pdev); /* VF chưa có private data vì chưa init datapath thật */
 	/*
 	 * Tạm thời VF chưa init datapath thật.
 	 * Sau này sẽ thêm:
@@ -131,7 +131,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	 * - init TX/RX queue
 	 */
 
-	eth_hw_addr_random(netdev);
+	// eth_hw_addr_random(netdev);
 
 	/*
 	 * Nếu bạn đã có VF netdev_ops thì mở dòng này:
@@ -139,23 +139,23 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	 * netdev->netdev_ops = &onic_vf_netdev_ops;
 	 */
 
-	err = register_netdev(netdev);
-	if (err) {
-		dev_err(&pdev->dev, "register_netdev failed: %d\n", err);
-		goto err_free_netdev;
-	}
+	// err = register_netdev(netdev);
+	// if (err) {
+	// 	dev_err(&pdev->dev, "register_netdev failed: %d\n", err);
+	// 	goto err_free_netdev;
+	// }
 
 	dev_info(&pdev->dev, "OpenNIC VF probe success, netdev=%s\n",
 		 netdev->name);
 
 	return 0;
 
-err_free_netdev:
-	pci_set_drvdata(pdev, NULL);
-	free_netdev(netdev);
+// err_free_netdev:
+// 	pci_set_drvdata(pdev, NULL);
+// 	free_netdev(netdev);
 
-err_release_regions:
-	pci_release_mem_regions(pdev);
+// err_release_regions:
+// 	pci_release_mem_regions(pdev);
 
 err_disable_device:
 	pci_disable_device(pdev);

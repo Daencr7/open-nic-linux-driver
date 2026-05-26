@@ -40,6 +40,10 @@
 #define ONIC_XDP_TX       	BIT(2)
 #define ONIC_XDP_REDIR    	BIT(3)
 
+
+/* NUM VF */
+#define ONIC_MAX_VFS 4
+
 enum onic_tx_buf_type {
 	ONIC_TX_SKB = BIT(0),
 	ONIC_TX_XDPF = BIT(1),
