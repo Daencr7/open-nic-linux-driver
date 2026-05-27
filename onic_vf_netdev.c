@@ -50,26 +50,40 @@ Sau đó mới nối datapath thật.
 // #include "onic.h"
 #include "onic_vf_netdev.h"
 
-
+/**
+ * Need to developemt
+ * - open VF netdev
+ */
 int onic_vf_open_netdev(struct net_device *netdev)
 {
-	// netif_start_queue(netdev);
-	// netdev_info(netdev, "VF netdev opened\n");
+	netdev_info(netdev, "onic_vf_open called\n");
+
+	netif_start_queue(netdev);
+	netif_carrier_on(netdev);
 	return 0;
 }
-
+/** 
+ * Need to developemt
+ * - stop VF netdev
+ */
 int onic_vf_stop_netdev(struct net_device *netdev)
 {
-	// netif_stop_queue(netdev);
-	// netdev_info(netdev, "VF netdev stopped\n");
+	netdev_info(netdev, "onic_vf_stop called\n");
+
+	netif_stop_queue(netdev);
+	netif_carrier_off(netdev);
 	return 0;
 }
 
+/**
+ * Need to developemt
+ * - transmit packet
+ */
 netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
 				      struct net_device *netdev)
 {
-	// netdev_info(netdev, "VF dummy TX packet len=%u, drop\n", skb->len);
+	netdev_info(netdev, "VF dummy TX packet len=%u, drop\n", skb->len);
 
-	// dev_kfree_skb_any(skb);
+	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
 }
