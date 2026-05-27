@@ -27,3 +27,49 @@ ip link set dev <vf> up không crash
 Sau đó mới nối datapath thật.
 
  */
+#include <linux/if_link.h>
+#include <linux/pci_regs.h>
+#include <linux/version.h>
+#include <linux/pci.h>
+#include <linux/etherdevice.h>
+#include <linux/netdevice.h>
+#include <linux/bpf.h>
+#include <linux/filter.h>
+#include <linux/bpf_trace.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <net/page_pool/helpers.h>
+#include <net/page_pool/types.h>
+#else 
+#include <net/page_pool.h>
+#endif
+
+// #include "onic_netdev.h"
+// #include "onic_hardware.h"
+// #include "qdma_access/qdma_register.h"
+// #include "onic.h"
+#include "onic_vf_netdev.h"
+
+
+int onic_vf_open_netdev(struct net_device *netdev)
+{
+	// netif_start_queue(netdev);
+	// netdev_info(netdev, "VF netdev opened\n");
+	return 0;
+}
+
+int onic_vf_stop_netdev(struct net_device *netdev)
+{
+	// netif_stop_queue(netdev);
+	// netdev_info(netdev, "VF netdev stopped\n");
+	return 0;
+}
+
+netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
+				      struct net_device *netdev)
+{
+	// netdev_info(netdev, "VF dummy TX packet len=%u, drop\n", skb->len);
+
+	// dev_kfree_skb_any(skb);
+	return NETDEV_TX_OK;
+}

@@ -16,7 +16,9 @@
 #include <linux/moduleparam.h>
 #include <linux/bpf.h>
 #include "onic.h"
+
 #include "onic_vf_netdev.h"
+
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
 char onic_drv_name[] = "onic_vf";
 #define DRV_VER "0.21"
@@ -85,28 +87,7 @@ static const struct net_device_ops onic_vf_netdev_ops = {
 	// .ndo_bpf = onic_xdp,
 };
 
-static int onic_vf_open_netdev(struct net_device *netdev)
-{
-	netif_start_queue(netdev);
-	netdev_info(netdev, "VF netdev opened\n");
-	return 0;
-}
 
-static int onic_vf_stop_netdev(struct net_device *netdev)
-{
-	netif_stop_queue(netdev);
-	netdev_info(netdev, "VF netdev stopped\n");
-	return 0;
-}
-
-static netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
-				      struct net_device *netdev)
-{
-	netdev_info(netdev, "VF dummy TX packet len=%u, drop\n", skb->len);
-
-	dev_kfree_skb_any(skb);
-	return NETDEV_TX_OK;
-}
 
 static int onic_vf_probe(struct pci_dev *pdev,
 			 const struct pci_device_id *ent)
@@ -165,10 +146,20 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	 * - init TX/RX queue
 	 */
 
-	eth_hw_addr_random(netdev);
-
-	
 	netdev->netdev_ops = &onic_vf_netdev_ops;
+	// Create a ramdom MAC address for VF netdev
+	// Need to fix when using mailbox to get MAC from PF
+	eth_hw_addr_random(netdev); 
+
+
+	netdev->min_mtu = ETH_MIN_MTU;
+	netdev->max_mtu = 9000;
+
+	// Have not implemented XDP for VF yet, so disable it for now
+	netif_carrier_off(netdev);
+
+
+
 	
 
 	err = register_netdev(netdev);
@@ -195,18 +186,38 @@ err_disable_device:
 	return err;
 }
 
+// static void onic_vf_remove(struct pci_dev *pdev)
+// {
+// 	struct onic_private *priv = pci_get_drvdata(pdev);
+
+// 	dev_info(&pdev->dev, "OpenNIC VF remove\n");
+
+// 	if (priv && priv->netdev) {
+// 		unregister_netdev(priv->netdev);
+// 		free_netdev(priv->netdev);
+// 	}
+
+// 	pci_set_drvdata(pdev, NULL);
+// 	pci_release_mem_regions(pdev);
+// 	pci_disable_device(pdev);
+// }
 static void onic_vf_remove(struct pci_dev *pdev)
 {
 	struct onic_private *priv = pci_get_drvdata(pdev);
+	struct net_device *netdev = NULL;
 
 	dev_info(&pdev->dev, "OpenNIC VF remove\n");
 
-	if (priv && priv->netdev) {
-		unregister_netdev(priv->netdev);
-		free_netdev(priv->netdev);
-	}
+	if (priv)
+		netdev = priv->netdev;
 
 	pci_set_drvdata(pdev, NULL);
+
+	if (netdev) {
+		unregister_netdev(netdev);
+		free_netdev(netdev);
+	}
+
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 }
