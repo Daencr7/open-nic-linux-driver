@@ -16,8 +16,10 @@
 #include <linux/moduleparam.h>
 #include <linux/bpf.h>
 #include "onic.h"
-
 #include "onic_vf_netdev.h"
+#include "onic_vf_hw.h"
+
+
 
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
 char onic_drv_name[] = "onic_vf";
@@ -137,6 +139,18 @@ static int onic_vf_probe(struct pci_dev *pdev,
 
 	pci_set_drvdata(pdev, priv);
 	// pci_set_drvdata(pdev, pdev); /* VF chưa có private data vì chưa init datapath thật */
+	/*	
+	 MAP VF BAR0/BAR2
+	 BAR0: QDMA/VF register /MSI-X/mailbox region
+	 BAR2: shell register region (if have)
+	*/
+	err = onic_vf_map_bars(priv);
+	if (err) {
+		dev_err(&pdev->dev, "Failed to map VF BARs: %d\n", err);
+		goto err_free_netdev;
+	}
+
+
 	/*
 	 * Tạm thời VF chưa init datapath thật.
 	 * Sau này sẽ thêm:
@@ -165,13 +179,16 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	err = register_netdev(netdev);
 	if (err) {
 		dev_err(&pdev->dev, "register_netdev failed: %d\n", err);
-		goto err_free_netdev;
+		goto err_unmap_bars;
 	}
 
 	dev_info(&pdev->dev, "OpenNIC VF probe success, netdev=%s\n",
 		 netdev->name);
 
 	return 0;
+
+err_unmap_bars:
+	onic_vf_unmap_bars(priv);
 
 err_free_netdev:
 	pci_set_drvdata(pdev, NULL);
@@ -186,21 +203,6 @@ err_disable_device:
 	return err;
 }
 
-// static void onic_vf_remove(struct pci_dev *pdev)
-// {
-// 	struct onic_private *priv = pci_get_drvdata(pdev);
-
-// 	dev_info(&pdev->dev, "OpenNIC VF remove\n");
-
-// 	if (priv && priv->netdev) {
-// 		unregister_netdev(priv->netdev);
-// 		free_netdev(priv->netdev);
-// 	}
-
-// 	pci_set_drvdata(pdev, NULL);
-// 	pci_release_mem_regions(pdev);
-// 	pci_disable_device(pdev);
-// }
 static void onic_vf_remove(struct pci_dev *pdev)
 {
 	struct onic_private *priv = pci_get_drvdata(pdev);
@@ -211,16 +213,41 @@ static void onic_vf_remove(struct pci_dev *pdev)
 	if (priv)
 		netdev = priv->netdev;
 
+	if (netdev)
+		unregister_netdev(netdev);
+
+	if (priv)
+		onic_vf_unmap_bars(priv);
+
 	pci_set_drvdata(pdev, NULL);
 
-	if (netdev) {
-		unregister_netdev(netdev);
+	if (netdev)
 		free_netdev(netdev);
-	}
 
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 }
+
+// static void onic_vf_remove(struct pci_dev *pdev)
+// {
+// 	struct onic_private *priv = pci_get_drvdata(pdev);
+// 	struct net_device *netdev = NULL;
+
+// 	dev_info(&pdev->dev, "OpenNIC VF remove\n");
+
+// 	if (priv)
+// 		netdev = priv->netdev;
+
+// 	pci_set_drvdata(pdev, NULL);
+
+// 	if (netdev) {
+// 		unregister_netdev(netdev);
+// 		free_netdev(netdev);
+// 	}
+
+// 	pci_release_mem_regions(pdev);
+// 	pci_disable_device(pdev);
+// }
 
 static struct pci_driver onic_vf_pci_driver = {
     .name = onic_drv_name,

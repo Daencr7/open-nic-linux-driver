@@ -24,3 +24,67 @@ VF không nên ghi:
 - CMAC control
 - shell reset
 */
+
+#include <linux/pci.h>
+#include "onic.h"
+#include "onic_vf_hw.h"
+
+
+#define ONIC_VF_QDMA_BAR   0
+#define ONIC_VF_SHELL_BAR  2
+
+int onic_vf_map_bars(struct onic_private *priv)
+{
+	struct pci_dev *pdev = priv->pdev;
+
+	priv->vf_hw.bar0_len = pci_resource_len(pdev, ONIC_VF_QDMA_BAR);
+	priv->vf_hw.bar2_len = pci_resource_len(pdev, ONIC_VF_SHELL_BAR);
+
+	dev_info(&pdev->dev, "VF BAR0 len=%pa\n", &priv->vf_hw.bar0_len);
+	dev_info(&pdev->dev, "VF BAR2 len=%pa\n", &priv->vf_hw.bar2_len);
+
+	if (!priv->vf_hw.bar0_len) {
+		dev_err(&pdev->dev, "VF BAR0 not available\n");
+		return -ENODEV;
+	}
+
+	priv->vf_hw.bar0 = pci_iomap(pdev, ONIC_VF_QDMA_BAR, 0);
+	if (!priv->vf_hw.bar0) {
+		dev_err(&pdev->dev, "failed to map VF BAR0\n");
+		return -ENOMEM;
+	}
+
+	if (priv->vf_hw.bar2_len) {
+		priv->vf_hw.bar2 = pci_iomap(pdev, ONIC_VF_SHELL_BAR, 0);
+		if (!priv->vf_hw.bar2) {
+			dev_err(&pdev->dev, "failed to map VF BAR2\n");
+			pci_iounmap(pdev, priv->vf_hw.bar0);
+			priv->vf_hw.bar0 = NULL;
+			return -ENOMEM;
+		}
+	}
+
+	dev_info(&pdev->dev, "VF BAR0 mapped addr=%p len=%pa\n",
+		 priv->vf_hw.bar0, &priv->vf_hw.bar0_len);
+	dev_info(&pdev->dev, "VF BAR2 mapped addr=%p len=%pa\n",
+		 priv->vf_hw.bar2, &priv->vf_hw.bar2_len);
+
+	return 0;
+}
+
+void onic_vf_unmap_bars(struct onic_private *priv)
+{
+	struct pci_dev *pdev = priv->pdev;
+
+	if (priv->vf_hw.bar2) {
+		pci_iounmap(pdev, priv->vf_hw.bar2);
+		priv->vf_hw.bar2 = NULL;
+		priv->vf_hw.bar2_len = 0;
+	}
+
+	if (priv->vf_hw.bar0) {
+		pci_iounmap(pdev, priv->vf_hw.bar0);
+		priv->vf_hw.bar0 = NULL;
+		priv->vf_hw.bar0_len = 0;
+	}
+}

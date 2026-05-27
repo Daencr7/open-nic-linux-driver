@@ -24,6 +24,8 @@
 #include <linux/bitops.h>
 
 #include "onic_hardware.h"
+#include "onic_vf_hw.h"
+
 
 #define ONIC_MAX_QUEUES			64
 
@@ -155,6 +157,7 @@ struct onic_private {
 	struct onic_rx_queue *rx_queue[ONIC_MAX_QUEUES];
 
 	struct onic_hardware hw;
+	struct onic_vf_hardware vf_hw;
 };
 
 #endif
