@@ -30,7 +30,7 @@ int onic_sriov_configure(struct pci_dev *pdev, int num_vfs)
 
 	if (!test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
 		return -EINVAL;
-/* Tạm định nghĩa cho ONIC_MAX_VFS */
+
 	if (num_vfs < 0 || num_vfs > ONIC_MAX_VFS)
 		return -EINVAL;
 
@@ -86,6 +86,14 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 			 i, vf_func_id, current_base_queue, queues_per_vf);
 
 		current_base_queue += queues_per_vf;
+		priv->vf_res[i].vf_id = i;
+		priv->vf_res[i].func_id = vf_func_id;
+		priv->vf_res[i].qbase = current_base_queue;
+		priv->vf_res[i].qmax = queues_per_vf;
+		priv->vf_res[i].num_tx_queues = queues_per_vf;
+		priv->vf_res[i].num_rx_queues = queues_per_vf;
+		eth_random_addr(priv->vf_res[i].mac);
+		priv->vf_res[i].enabled = true;
 	}
 
     return 0;

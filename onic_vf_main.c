@@ -20,7 +20,6 @@
 #include "onic_vf_hw.h"
 
 
-
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
 char onic_drv_name[] = "onic_vf";
 #define DRV_VER "0.21"
@@ -149,12 +148,19 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		dev_err(&pdev->dev, "Failed to map VF BARs: %d\n", err);
 		goto err_free_netdev;
 	}
+	/* Đọc một số thông tin từ register để verify BAR access */
+	u32 bar0_val;
+	u32 build_ts;
 
+	bar0_val = onic_vf_read_bar0(priv, 0x0);
+	dev_info(&pdev->dev, "VF BAR0[0x0] = 0x%08x\n", bar0_val);
+
+	build_ts = onic_vf_read_bar2(priv, 0x0);
+	dev_info(&pdev->dev, "VF BAR2 build timestamp [0x0] = 0x%08x\n", build_ts);
 
 	/*
 	 * Tạm thời VF chưa init datapath thật.
 	 * Sau này sẽ thêm:
-	 * - map BAR
 	 * - init mailbox
 	 * - request qbase/qmax từ PF
 	 * - init TX/RX queue

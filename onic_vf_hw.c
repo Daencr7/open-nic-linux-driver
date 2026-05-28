@@ -49,6 +49,7 @@ int onic_vf_map_bars(struct onic_private *priv)
 	}
 
 	priv->vf_hw.bar0 = pci_iomap(pdev, ONIC_VF_QDMA_BAR, 0);
+	
 	if (!priv->vf_hw.bar0) {
 		dev_err(&pdev->dev, "failed to map VF BAR0\n");
 		return -ENOMEM;
@@ -63,6 +64,14 @@ int onic_vf_map_bars(struct onic_private *priv)
 			return -ENOMEM;
 		}
 	}
+	
+	// priv->vf_hw.qdma.pdev = pdev;
+	// priv->vf_hw.qdma.func_id = PCI_FUNC(pdev->devfn);
+	// if (priv->vf_hw.bar0)
+	// 	priv->vf_hw.qdma_hw.addr = priv->vf_hw.bar0;
+
+	// if (priv->vf_hw.bar2)
+	// 	priv->vf_hw.shell_hw.addr = priv->vf_hw.bar2;
 
 	dev_info(&pdev->dev, "VF BAR0 mapped addr=%p len=%pa\n",
 		 priv->vf_hw.bar0, &priv->vf_hw.bar0_len);
@@ -87,4 +96,65 @@ void onic_vf_unmap_bars(struct onic_private *priv)
 		priv->vf_hw.bar0 = NULL;
 		priv->vf_hw.bar0_len = 0;
 	}
+	// priv->vf_hw.qdma.addr = NULL;
+	// priv->vf_hw.shell.addr = NULL;	
+}
+
+
+#include "onic.h"
+#include "onic_vf_hw.h"
+
+static bool onic_vf_bar_range_ok(resource_size_t len, u32 offset)
+{
+	if (!len)
+		return false;
+
+	if (offset > len - sizeof(u32))
+		return false;
+
+	return true;
+}
+
+u32 onic_vf_read_bar0(struct onic_private *priv, u32 offset)
+{
+	if (!priv || !priv->vf_hw.bar0)
+		return 0xffffffff;
+
+	if (!onic_vf_bar_range_ok(priv->vf_hw.bar0_len, offset))
+		return 0xffffffff;
+
+	return ioread32(priv->vf_hw.bar0 + offset);
+}
+
+void onic_vf_write_bar0(struct onic_private *priv, u32 offset, u32 val)
+{
+	if (!priv || !priv->vf_hw.bar0)
+		return;
+
+	if (!onic_vf_bar_range_ok(priv->vf_hw.bar0_len, offset))
+		return;
+
+	iowrite32(val, priv->vf_hw.bar0 + offset);
+}
+
+u32 onic_vf_read_bar2(struct onic_private *priv, u32 offset)
+{
+	if (!priv || !priv->vf_hw.bar2)
+		return 0xffffffff;
+
+	if (!onic_vf_bar_range_ok(priv->vf_hw.bar2_len, offset))
+		return 0xffffffff;
+
+	return ioread32(priv->vf_hw.bar2 + offset);
+}
+
+void onic_vf_write_bar2(struct onic_private *priv, u32 offset, u32 val)
+{
+	if (!priv || !priv->vf_hw.bar2)
+		return;
+
+	if (!onic_vf_bar_range_ok(priv->vf_hw.bar2_len, offset))
+		return;
+
+	iowrite32(val, priv->vf_hw.bar2 + offset);
 }
