@@ -101,8 +101,7 @@ void onic_vf_unmap_bars(struct onic_private *priv)
 }
 
 
-#include "onic.h"
-#include "onic_vf_hw.h"
+
 
 static bool onic_vf_bar_range_ok(resource_size_t len, u32 offset)
 {
