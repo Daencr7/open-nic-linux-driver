@@ -7,7 +7,7 @@
 #include <linux/types.h>
 #include <linux/errno.h>
 #include <linux/pci.h>
-
+#include <linux/etherdevice.h>
 
 #include "qdma_context.h"
 #include "qdma_device.h"
