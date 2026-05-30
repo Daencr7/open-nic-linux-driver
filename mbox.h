@@ -81,3 +81,50 @@ wait response
 parse response
 save resource
 */
+
+
+#ifndef __ONIC_VF__
+#define __ONIC_VF__
+
+
+#include <linux/types.h>
+#include <linux/if_ether.h>
+
+#define ONIC_MBOX_MAGIC          0x4F4E4943 /* "ONIC" */
+#define ONIC_MBOX_VERSION        1
+
+#define ONIC_MBOX_STATUS_OK      0
+#define ONIC_MBOX_STATUS_ERR     1
+
+enum onic_mbox_opcode {
+	ONIC_MBOX_OP_GET_RESOURCE = 1,
+};
+
+struct onic_mbox_hdr {
+	u32 magic;
+	u16 version;
+	u16 opcode;
+	u16 vf_id;
+	u16 seq;
+	u16 status;
+	u16 len;
+};
+
+struct onic_mbox_get_resource_req {
+	struct onic_mbox_hdr hdr;
+};
+
+struct onic_mbox_get_resource_resp {
+	struct onic_mbox_hdr hdr;
+
+	u16 qbase;
+	u16 qmax;
+
+	u16 num_tx_queues;
+	u16 num_rx_queues;
+
+	u8 mac[ETH_ALEN];
+};
+
+
+#endif /* __ONIC_VF__ */

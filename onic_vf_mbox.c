@@ -31,3 +31,30 @@ QDMA hỗ trợ mailbox giữa PF/VF;
 mỗi function có inbox 128B và outbox 128B, thường visible trong DMA BAR, 
 và mỗi function có thể có một outgoing và một incoming mailbox message outstanding
  */
+
+//  static void onic_mbox_write_msg(void __iomem *base, u32 off,
+// 				const void *msg, size_t len)
+// {
+// 	size_t i;
+// 	u32 word;
+
+// 	for (i = 0; i < len; i += 4) {
+// 		word = 0;
+// 		memcpy(&word, (const u8 *)msg + i,
+// 		       min_t(size_t, 4, len - i));
+// 		iowrite32(word, base + off + i);
+// 	}
+// }
+
+// static void onic_mbox_read_msg(void __iomem *base, u32 off,
+// 			       void *msg, size_t len)
+// {
+// 	size_t i;
+// 	u32 word;
+
+// 	for (i = 0; i < len; i += 4) {
+// 		word = ioread32(base + off + i);
+// 		memcpy((u8 *)msg + i, &word,
+// 		       min_t(size_t, 4, len - i));
+// 	}
+// }

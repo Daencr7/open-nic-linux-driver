@@ -31,6 +31,8 @@
 #include "onic_common.h"
 #include "onic_netdev.h"
 #include "onic_sriov.h"
+#include "onic_register.h"
+#include "onic_mbox.h"
 #undef CMS_SUPPORT    /* Need CMS IP in the design @320000 offset */
 
 #ifndef ONIC_VF
@@ -271,6 +273,9 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	pci_set_drvdata(pdev, priv);
 	netif_carrier_off(netdev);
 
+	/* PF polling */
+	onic_pf_mbox_start(priv);
+
 #ifdef CMS_SUPPORT
         /* Support CMS sensors (lm-sensors), refer: pg348 */
         if(xmc_init == 0)
@@ -320,9 +325,11 @@ static void onic_remove(struct pci_dev *pdev)
 	onic_clear_hardware(priv);
 	onic_clear_capacity(priv);
 
-	free_netdev(priv->netdev);
 
+	free_netdev(priv->netdev);
 	pci_set_drvdata(pdev, NULL);
+
+	onic_pf_mbox_stop(priv);
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 

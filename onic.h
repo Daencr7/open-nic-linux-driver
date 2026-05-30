@@ -159,6 +159,9 @@ struct onic_private {
 	struct onic_hardware hw;
 	struct onic_vf_hardware vf_hw;  // for VF BAR mapping
 	struct onic_vf_resource vf_res[ONIC_MAX_VFS]; // for VF resource tracking
+	u16 num_vfs;
+
+	struct delayed_work mbox_work;
 };
 
 #endif

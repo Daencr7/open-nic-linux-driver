@@ -81,9 +81,9 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		if (err)
 			return err;
 
-		dev_info(&priv->pdev->dev,
-			 "VF%d func_id=%u qbase=%d qmax=%d\n",
-			 i, vf_func_id, current_base_queue, queues_per_vf);
+		// dev_info(&priv->pdev->dev,
+		// 	 "VF%d func_id=%u qbase=%d qmax=%d\n",
+		// 	 i, vf_func_id, current_base_queue, queues_per_vf);
 
 		current_base_queue += queues_per_vf;
 		priv->vf_res[i].vf_id = i;
@@ -94,6 +94,16 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		priv->vf_res[i].num_rx_queues = queues_per_vf;
 		eth_random_addr(priv->vf_res[i].mac);
 		priv->vf_res[i].enabled = true;
+		priv->num_vfs = num_vfs;
+		dev_info(&priv->pdev->dev,
+				"VF%d resource: func_id=%u qbase=%u qmax=%u txq=%u rxq=%u mac=%pM\n",
+				i,
+				priv->vf_res[i].func_id,
+				priv->vf_res[i].qbase,
+				priv->vf_res[i].qmax,
+				priv->vf_res[i].num_tx_queues,
+				priv->vf_res[i].num_rx_queues,
+				priv->vf_res[i].mac);
 	}
 
     return 0;

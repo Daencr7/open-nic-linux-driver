@@ -427,4 +427,35 @@ static inline void qdma_write_reg(struct qdma_dev *qdev, u32 offset, u32 val)
 #define     QDMA_DBE_ERR_H2C_PEND_FIFO_MASK                 BIT(31)
 #define     QDMA_DBE_ERR_ALL_MASK                           0xFFFFFF11
 
+
+/* Mailbox status bits */
+#define QDMA_MBOX_STS_I_MSG_MASK        BIT(0)
+#define QDMA_MBOX_STS_O_MSG_MASK        BIT(1)
+#define QDMA_MBOX_STS_ACK_MASK          BIT(2)
+#define QDMA_MBOX_STS_CUR_SRC_FN_MASK   GENMASK(11, 4)
+#define QDMA_MBOX_STS_CUR_SRC_FN_SHIFT  4
+
+/* Mailbox command bits */
+#define QDMA_MBOX_CMD_SEND              BIT(0)
+#define QDMA_MBOX_CMD_RCV               BIT(1)
+#define QDMA_MBOX_CMD_POP               BIT(2)
+
+/* PF mailbox registers */
+#define QDMA_PF_MBOX_STS                0x22400
+#define QDMA_PF_MBOX_CMD                0x22404
+#define QDMA_PF_MBOX_INTR_VEC           0x22408
+#define QDMA_PF_MBOX_TARGET_FN          0x2240C
+#define QDMA_PF_MBOX_INTR_CTRL          0x22410
+#define QDMA_PF_MBOX_IN_MSG             0x22C00
+#define QDMA_PF_MBOX_OUT_MSG            0x23000
+
+/* VF mailbox registers */
+#define QDMA_VF_MBOX_STS                0x5000
+#define QDMA_VF_MBOX_CMD                0x5004
+#define QDMA_VF_MBOX_INTR_VEC           0x5008
+#define QDMA_VF_MBOX_TARGET_FN          0x500C
+#define QDMA_VF_MBOX_INTR_CTRL          0x5010
+#define QDMA_VF_MBOX_IN_MSG             0x5800
+#define QDMA_VF_MBOX_OUT_MSG            0x5C00
+
 #endif

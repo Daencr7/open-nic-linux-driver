@@ -96,7 +96,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	struct net_device *netdev;
 	struct onic_private *priv;
 	int err;
-	u32 build_ts;
+	// u32 build_ts;
 
 	dev_info(&pdev->dev, "OpenNIC VF probe start\n");
 
@@ -155,8 +155,8 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	// bar0_val = onic_vf_read_bar0(priv, 0x0);
 	// dev_info(&pdev->dev, "VF BAR0[0x0] = 0x%08x\n", bar0_val);
 
-	build_ts = onic_vf_read_bar2(priv, 0x0);
-	dev_info(&pdev->dev, "VF BAR2 build timestamp[0x0] = 0x%08x\n", build_ts);
+	// build_ts = onic_vf_read_bar2(priv, 0x0);
+	// dev_info(&pdev->dev, "VF BAR2 build timestamp[0x0] = 0x%08x\n", build_ts);
 
 	/*
 	 * Tạm thời VF chưa init datapath thật.
