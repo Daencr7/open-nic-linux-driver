@@ -100,6 +100,10 @@ static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 {
 	struct onic_private *priv = dev_id;
 	struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
+	u32 mbox_status;
+	int err;
+
+	mbox_status = qdma_read_reg(qdev, QDMA_PF_MBOX_STS);
 
 	dev_err(&priv->pdev->dev,
 		"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
@@ -107,7 +111,7 @@ static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 
 	dev_err(&priv->pdev->dev,
 		"PF mbox: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
-		qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+		mbox_status,
 		qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
 		qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 
@@ -119,7 +123,20 @@ static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 		qdma_read_reg(qdev, QDMA_OFFSET_C2H_ERR_STAT),
 		qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT),
 		qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_INT));
-		return IRQ_HANDLED;
+
+	if (mbox_status & (QDMA_MBOX_STS_I_MSG_MASK |
+			   QDMA_MBOX_STS_ACK_MASK)) {
+		err = onic_pf_mbox_process_pending(priv);
+		if (err < 0)
+			dev_err(&priv->pdev->dev,
+				"PF mailbox fallback failed: %d\n", err);
+		else
+			dev_info(&priv->pdev->dev,
+				 "PF mailbox fallback processed %d event(s)\n",
+				 err);
+	}
+
+	return IRQ_HANDLED;
 }
 
 /**
