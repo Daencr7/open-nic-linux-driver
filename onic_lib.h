@@ -18,7 +18,7 @@
 #define __ONIC_LIB_H__
 
 #include "onic.h"
-
+#include "qdma_register.h"
 /**
  * onic_init_capacity - calculate the number of vectors and queues
  * @priv: pointer to driver private data
