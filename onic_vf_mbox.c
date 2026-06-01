@@ -5,7 +5,7 @@
 #include <linux/jiffies.h>
 #include <linux/interrupt.h>
 #include <linux/pci.h>
-
+#include <linux/random.h>
 #include "onic.h"
 #include "onic_vf_mbox.h"
 #include "qdma_register.h"
@@ -90,7 +90,7 @@ int onic_vf_mbox_irq_init(struct onic_private *priv, u16 vector)
 
 	init_completion(&vf_hw->mbox_done);
 	mutex_init(&vf_hw->mbox_lock);
-
+	vf_hw->mbox_seq = get_random_u32();
 	err = request_threaded_irq(pci_irq_vector(pdev, vector),
 				   onic_vf_mbox_irq_handler,
 				   onic_vf_mbox_irq_thread,
@@ -126,6 +126,29 @@ void onic_vf_mbox_irq_clear(struct onic_private *priv)
 	vf_hw->mbox_irq_allocated = false;
 }
 
+static int onic_vf_mbox_drop_stale_responses(struct onic_private *priv)
+{
+	struct onic_mbox_msg stale;
+	u32 status;
+	int dropped;
+
+	for (dropped = 0; dropped < 16; dropped++) {
+		status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
+		if (!(status & QDMA_MBOX_STS_I_MSG_MASK))
+			return dropped;
+
+		onic_vf_mbox_read_msg(priv, QDMA_VF_MBOX_IN_MSG, &stale);
+		onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD,
+				   QDMA_MBOX_CMD_RCV);
+
+		dev_warn(&priv->pdev->dev,
+			 "Dropped stale VF mailbox response: opcode=%u seq=%u\n",
+			 stale.hdr.opcode, stale.hdr.seq);
+	}
+
+	return -EIO;
+}
+
 int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 {
 	struct onic_vf_hardware *vf_hw = &priv->vf_hw;
@@ -136,6 +159,10 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 	u32 status;
 
 	mutex_lock(&vf_hw->mbox_lock);
+	err = onic_vf_mbox_drop_stale_responses(priv);
+	if (err < 0)
+		goto out_unlock;
+		
 	status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
 	if (status & QDMA_MBOX_STS_O_MSG_MASK) {
 		err = -EBUSY;
@@ -174,8 +201,10 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 		*/
 		if (status & QDMA_MBOX_STS_I_MSG_MASK) {
 			err = onic_vf_mbox_process_one(priv);
-			if (err > 0)
+			if (err > 0) {
+				err = 0;
 				goto validate_response;
+			}
 		}
 
 		err = -ETIMEDOUT;

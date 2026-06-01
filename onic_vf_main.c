@@ -19,6 +19,8 @@
 #include "onic_vf_netdev.h"
 #include "onic_vf_hw.h"
 #include "onic_vf_mbox.h"
+#include "onic_vf_qdma.h"
+
 
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
 char onic_drv_name[] = "onic_vf";
@@ -175,7 +177,11 @@ static int onic_vf_probe(struct pci_dev *pdev,
 			"Failed to get VF queue resource: %d\n", err);
 		goto err_clear_mbox_irq;
 	}
-
+	err = onic_vf_qdma_init(priv);
+	if (err) {
+		dev_err(&pdev->dev, "Failed to initialize VF QDMA state: %d\n", err);
+		goto err_clear_mbox_irq;
+	}
 	/*
 	 * Tạm thời VF chưa init datapath thật.
 	 * Sau này sẽ thêm:
@@ -203,7 +209,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	err = register_netdev(netdev);
 	if (err) {
 		dev_err(&pdev->dev, "register_netdev failed: %d\n", err);
-		goto err_clear_mbox_irq;
+		goto err_clear_vf_qdma;
 	}
 
 	dev_info(&pdev->dev, "OpenNIC VF probe success, netdev=%s\n",
@@ -211,6 +217,8 @@ static int onic_vf_probe(struct pci_dev *pdev,
 
 	return 0;
 
+err_clear_vf_qdma:
+	onic_vf_qdma_clear(priv);
 
 err_clear_mbox_irq:
 	onic_vf_mbox_irq_clear(priv);
@@ -249,6 +257,7 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		unregister_netdev(netdev);
 
 	if (priv) {
+		onic_vf_qdma_clear(priv);
 		onic_vf_mbox_irq_clear(priv);
 		priv->num_q_vectors = 0;
 		pci_free_irq_vectors(pdev);
