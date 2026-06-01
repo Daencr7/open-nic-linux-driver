@@ -176,6 +176,36 @@ static int onic_pf_mbox_process_acks(struct onic_private *priv)
 
 	return processed;
 }
+
+static int onic_pf_mbox_drop_stale_requests(struct onic_private *priv)
+{
+	struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
+	u32 status;
+	u16 src_func_id;
+	int dropped;
+
+	if (!qdev || !qdev->addr)
+		return -ENODEV;
+
+	for (dropped = 0; dropped < 256; dropped++) {
+		status = qdma_read_reg(qdev, QDMA_PF_MBOX_STS);
+		if (!(status & QDMA_MBOX_STS_I_MSG_MASK))
+			return dropped;
+
+		src_func_id =
+			BITFIELD_GET(QDMA_MBOX_STS_CUR_SRC_FN_MASK, status);
+
+		qdma_write_reg(qdev, QDMA_PF_MBOX_TARGET_FN, src_func_id);
+		qdma_write_reg(qdev, QDMA_PF_MBOX_CMD, QDMA_MBOX_CMD_RCV);
+
+		dev_warn(&priv->pdev->dev,
+			 "Dropped stale PF mailbox request from func_id=%u\n",
+			 src_func_id);
+	}
+
+	return -EIO;
+}
+
 int onic_pf_mbox_process_pending(struct onic_private *priv)
 {
 	int processed = 0;
@@ -225,12 +255,20 @@ void onic_pf_mbox_irq_enable(struct onic_private *priv)
 int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
 {
 	struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
-
+	int dropped;
 	if (!qdev || !qdev->addr)
 		return -ENODEV;
 
+	onic_pf_mbox_irq_disable(priv);
+
+	dropped = onic_pf_mbox_drop_stale_requests(priv);
+	if (dropped < 0)
+		return dropped;
+
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_VEC, vector);
 	onic_pf_mbox_irq_enable(priv);
+
+
 
 	return 0;
 }
