@@ -154,11 +154,34 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 
 	timeout = wait_for_completion_timeout(&vf_hw->mbox_done,
 					      msecs_to_jiffies(1000));
+	// if (!timeout) {
+	// 	err = -ETIMEDOUT;
+	// 	goto out_unlock;
+	// }
+
 	if (!timeout) {
+		status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
+
+		dev_err(&priv->pdev->dev,
+			"VF mailbox timeout: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+			status,
+			onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
+			onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
+
+		/*
+		* Bring-up fallback: inspect a response that reached VF inbox
+		* even if VF mailbox MSI-X routing did not fire.
+		*/
+		if (status & QDMA_MBOX_STS_I_MSG_MASK) {
+			err = onic_vf_mbox_process_one(priv);
+			if (err > 0)
+				goto validate_response;
+		}
+
 		err = -ETIMEDOUT;
 		goto out_unlock;
 	}
-
+validate_response:
 	if (resp->hdr.opcode != ONIC_MBOX_OP_QUEUE_RES_RESP ||
 	    resp->hdr.seq != req.hdr.seq ||
 	    resp->hdr.status != ONIC_MBOX_STS_OK ||
