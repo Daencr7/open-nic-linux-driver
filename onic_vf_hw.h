@@ -5,17 +5,41 @@
 #include <linux/pci.h>
 #include <linux/io.h>
 #include "onic.h"
+#include <linux/completion.h>
+#include <linux/mutex.h>
+#include <linux/types.h>
+#include "onic_mbox.h"
 
 struct onic_private;
 
+
 struct onic_vf_hardware {
+    struct qdma_dev *qdev;
+    u32 mbox_seq;
+    struct completion mbox_done;
+    struct mutex mbox_lock;
+    struct onic_mbox_msg mbox_resp;
+    bool mbox_irq_allocated;
+    u16 mbox_vector;
+
+    u16 func_id;
+    u16 qbase;
+    u16 qmax;
+
+    u16 num_tx_queues;
+    u16 num_rx_queues;
+
+    u8 mac[ETH_ALEN];
+
+    bool resource_valid;
+
     void __iomem *bar0;
     void __iomem *bar2;
     resource_size_t bar0_len;
     resource_size_t bar2_len;
 
-    // struct onic_hardware qdma_hw;   /* use for BAR0 */
-	// struct onic_hardware shell_hw;  /* use for BAR2 */
+
+
 };
 
 

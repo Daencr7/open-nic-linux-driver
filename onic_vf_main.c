@@ -18,13 +18,15 @@
 #include "onic.h"
 #include "onic_vf_netdev.h"
 #include "onic_vf_hw.h"
-
+#include "onic_vf_mbox.h"
 
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
 char onic_drv_name[] = "onic_vf";
 #define DRV_VER "0.21"
 const char onic_drv_str[] = DRV_STR;
 const char onic_drv_ver[] = DRV_VER;
+
+#define ONIC_VF_NON_Q_VECTORS 1
 
 MODULE_AUTHOR("Edna");
 MODULE_DESCRIPTION(DRV_STR);
@@ -96,6 +98,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	struct net_device *netdev;
 	struct onic_private *priv;
 	int err;
+	int vectors;
 	// u32 build_ts;
 
 	dev_info(&pdev->dev, "OpenNIC VF probe start\n");
@@ -149,14 +152,29 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		dev_err(&pdev->dev, "Failed to map VF BARs: %d\n", err);
 		goto err_free_netdev;
 	}
-	/* Đọc một số thông tin từ register để verify BAR access */
-	// u32 bar0_val;
+	vectors = pci_alloc_irq_vectors(pdev,
+				ONIC_VF_NON_Q_VECTORS,
+				ONIC_MAX_QUEUES + ONIC_VF_NON_Q_VECTORS,
+				PCI_IRQ_MSIX);
+	if (vectors < 0) {
+		dev_err(&pdev->dev,
+			"Failed to allocate VF MSI-X vectors: %d\n", vectors);
+		err = vectors;
+		goto err_unmap_bars;
+	}
 
-	// bar0_val = onic_vf_read_bar0(priv, 0x0);
-	// dev_info(&pdev->dev, "VF BAR0[0x0] = 0x%08x\n", bar0_val);
+	priv->num_q_vectors = vectors - ONIC_VF_NON_Q_VECTORS;
 
-	// build_ts = onic_vf_read_bar2(priv, 0x0);
-	// dev_info(&pdev->dev, "VF BAR2 build timestamp[0x0] = 0x%08x\n", build_ts);
+	err = onic_vf_mbox_irq_init(priv, priv->num_q_vectors);
+	if (err)
+		goto err_free_irq_vectors;
+
+	err = onic_vf_mbox_get_queue_resource(priv);
+	if (err) {
+		dev_err(&pdev->dev,
+			"Failed to get VF queue resource: %d\n", err);
+		goto err_clear_mbox_irq;
+	}
 
 	/*
 	 * Tạm thời VF chưa init datapath thật.
@@ -185,13 +203,21 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	err = register_netdev(netdev);
 	if (err) {
 		dev_err(&pdev->dev, "register_netdev failed: %d\n", err);
-		goto err_unmap_bars;
+		goto err_clear_mbox_irq;
 	}
 
 	dev_info(&pdev->dev, "OpenNIC VF probe success, netdev=%s\n",
 		 netdev->name);
 
 	return 0;
+
+
+err_clear_mbox_irq:
+	onic_vf_mbox_irq_clear(priv);
+
+err_free_irq_vectors:
+	priv->num_q_vectors = 0;
+	pci_free_irq_vectors(pdev);
 
 err_unmap_bars:
 	onic_vf_unmap_bars(priv);
@@ -222,8 +248,12 @@ static void onic_vf_remove(struct pci_dev *pdev)
 	if (netdev)
 		unregister_netdev(netdev);
 
-	if (priv)
+	if (priv) {
+		onic_vf_mbox_irq_clear(priv);
+		priv->num_q_vectors = 0;
+		pci_free_irq_vectors(pdev);
 		onic_vf_unmap_bars(priv);
+	}
 
 	pci_set_drvdata(pdev, NULL);
 

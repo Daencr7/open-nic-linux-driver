@@ -14,15 +14,16 @@
 int onic_sriov_configure(struct pci_dev *pdev, int num_vfs)
 {
 	struct onic_private *priv = pci_get_drvdata(pdev);
+	int enabled_vfs;
 	int rv;
 	if(num_vfs == 0) {
 		if(pci_vfs_assigned(pdev)) {
 			dev_err(&pdev->dev, "Cannot disable SR-IOV while VFs are assigned");
 			return -EBUSY;
 		}
-		
+		enabled_vfs = pci_num_vf(pdev);
 		pci_disable_sriov(pdev);
-		onic_free_vf_resources(priv, pci_num_vf(pdev));
+		onic_free_vf_resources(priv, enabled_vfs);
 		dev_info(&pdev->dev, "SR-IOV disabled");
 		return 0;
 	}
@@ -49,7 +50,7 @@ int onic_sriov_configure(struct pci_dev *pdev, int num_vfs)
 	}
 	dev_info(&pdev->dev, "SR-IOV enabled with %d VFs", num_vfs);
 
-	return 0;
+	return num_vfs;
 }
 
 
@@ -69,7 +70,7 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		struct qdma_fmap_ctxt fmap_ctxt = {0};
 		struct qdma_dev vf_qdev = {0};
 		u16 vf_func_id = 4 + i;
-
+ 
 		fmap_ctxt.qbase = current_base_queue;
 		fmap_ctxt.qmax  = queues_per_vf;
 
@@ -78,14 +79,12 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		vf_qdev.func_id = vf_func_id;
 
 		err = qdma_write_fmap_ctxt(&vf_qdev, &fmap_ctxt);
-		if (err)
+		if (err) {
+			qdma_clear_fmap_ctxt(&vf_qdev);
+			onic_free_vf_resources(priv, i);
 			return err;
-
-		// dev_info(&priv->pdev->dev,
-		// 	 "VF%d func_id=%u qbase=%d qmax=%d\n",
-		// 	 i, vf_func_id, current_base_queue, queues_per_vf);
-
-		current_base_queue += queues_per_vf;
+		}
+			
 		priv->vf_res[i].vf_id = i;
 		priv->vf_res[i].func_id = vf_func_id;
 		priv->vf_res[i].qbase = current_base_queue;
@@ -94,7 +93,6 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		priv->vf_res[i].num_rx_queues = queues_per_vf;
 		eth_random_addr(priv->vf_res[i].mac);
 		priv->vf_res[i].enabled = true;
-		priv->num_vfs = num_vfs;
 		dev_info(&priv->pdev->dev,
 				"VF%d resource: func_id=%u qbase=%u qmax=%u txq=%u rxq=%u mac=%pM\n",
 				i,
@@ -104,7 +102,10 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 				priv->vf_res[i].num_tx_queues,
 				priv->vf_res[i].num_rx_queues,
 				priv->vf_res[i].mac);
+		current_base_queue += queues_per_vf;
+		
 	}
+	priv->num_vfs = num_vfs;
 
     return 0;
 }
@@ -112,5 +113,33 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 
 void onic_free_vf_resources(struct onic_private *priv, int num_vfs)
 {
-	/* No resources to free in this implementation since we didn't allocate any per-VF resources */
+	struct qdma_dev *pf_qdev = (struct qdma_dev *)priv->hw.qdma;
+	int i;
+	int err;
+
+	if (!pf_qdev)
+		return;
+
+	num_vfs = min_t(int, num_vfs, ONIC_MAX_VFS);
+
+	for (i = 0; i < num_vfs; i++) {
+		struct qdma_dev vf_qdev = {0};
+
+		if (!priv->vf_res[i].enabled)
+			continue;
+
+		vf_qdev.pdev = priv->pdev;
+		vf_qdev.addr = pf_qdev->addr;
+		vf_qdev.func_id = priv->vf_res[i].func_id;
+
+		err = qdma_clear_fmap_ctxt(&vf_qdev);
+		if (err)
+			dev_warn(&priv->pdev->dev,
+				 "Failed to clear VF%d FMAP, err=%d\n",
+				 i, err);
+
+		memset(&priv->vf_res[i], 0, sizeof(priv->vf_res[i]));
+	}
+
+	priv->num_vfs = 0;
 }

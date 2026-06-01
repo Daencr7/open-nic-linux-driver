@@ -22,7 +22,10 @@
 #include <linux/bpf.h>
 #include <net/xdp.h>
 #include <linux/bitops.h>
-
+#include <linux/completion.h>
+#include <linux/workqueue.h>
+#include <linux/mutex.h>
+#include "onic_mbox.h"
 #include "onic_hardware.h"
 #include "onic_vf_hw.h"
 #include "onic_vf.h"
@@ -161,7 +164,6 @@ struct onic_private {
 	struct onic_vf_resource vf_res[ONIC_MAX_VFS]; // for VF resource tracking
 	u16 num_vfs;
 
-	struct delayed_work mbox_work;
 };
 
 #endif

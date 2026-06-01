@@ -58,8 +58,8 @@ int onic_vf_open_netdev(struct net_device *netdev)
 {
 	netdev_info(netdev, "onic_vf_open called\n");
 
-	netif_start_queue(netdev);
-	netif_carrier_on(netdev);
+	// netif_start_queue(netdev);
+	// netif_carrier_on(netdev);
 	return 0;
 }
 /** 
@@ -70,8 +70,8 @@ int onic_vf_stop_netdev(struct net_device *netdev)
 {
 	netdev_info(netdev, "onic_vf_stop called\n");
 
-	netif_stop_queue(netdev);
-	netif_carrier_off(netdev);
+	// netif_stop_queue(netdev);
+	// netif_carrier_off(netdev);
 	return 0;
 }
 
@@ -82,8 +82,8 @@ int onic_vf_stop_netdev(struct net_device *netdev)
 netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
 				      struct net_device *netdev)
 {
-	netdev_info(netdev, "VF dummy TX packet len=%u, drop\n", skb->len);
+	// netdev_info(netdev, "VF dummy TX packet len=%u, drop\n", skb->len);
 
-	dev_kfree_skb_any(skb);
+	// dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
 }

@@ -273,8 +273,6 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	pci_set_drvdata(pdev, priv);
 	netif_carrier_off(netdev);
 
-	/* PF polling */
-	onic_pf_mbox_start(priv);
 
 #ifdef CMS_SUPPORT
         /* Support CMS sensors (lm-sensors), refer: pg348 */
@@ -329,7 +327,7 @@ static void onic_remove(struct pci_dev *pdev)
 	free_netdev(priv->netdev);
 	pci_set_drvdata(pdev, NULL);
 
-	onic_pf_mbox_stop(priv);
+
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 

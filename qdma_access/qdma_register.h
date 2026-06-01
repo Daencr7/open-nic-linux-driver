@@ -438,14 +438,16 @@ static inline void qdma_write_reg(struct qdma_dev *qdev, u32 offset, u32 val)
 /* Mailbox command bits */
 #define QDMA_MBOX_CMD_SEND              BIT(0)
 #define QDMA_MBOX_CMD_RCV               BIT(1)
-#define QDMA_MBOX_CMD_POP               BIT(2)
-
+#define QDMA_MBOX_INTR_CTRL_EN          BIT(0)
 /* PF mailbox registers */
 #define QDMA_PF_MBOX_STS                0x22400
 #define QDMA_PF_MBOX_CMD                0x22404
 #define QDMA_PF_MBOX_INTR_VEC           0x22408
 #define QDMA_PF_MBOX_TARGET_FN          0x2240C
 #define QDMA_PF_MBOX_INTR_CTRL          0x22410
+#define QDMA_PF_MBOX_ACK_BASE           0x22420
+#define QDMA_PF_MBOX_ACK_REGS           8
+#define QDMA_PF_MBOX_ACK(i)             (QDMA_PF_MBOX_ACK_BASE + ((i) * 4))
 #define QDMA_PF_MBOX_IN_MSG             0x22C00
 #define QDMA_PF_MBOX_OUT_MSG            0x23000
 

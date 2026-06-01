@@ -37,20 +37,56 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+// static irqreturn_t onic_user_handler(int irq, void *dev_id)
+// {
+// 	struct onic_private *priv = dev_id;
+// 	dev_info(&priv->pdev->dev, "user irq");
+// 	return IRQ_WAKE_THREAD;
+// }
+
 static irqreturn_t onic_user_handler(int irq, void *dev_id)
 {
 	struct onic_private *priv = dev_id;
-	dev_info(&priv->pdev->dev, "user irq");
+
+	if (test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
+		onic_pf_mbox_irq_disable(priv);
+
 	return IRQ_WAKE_THREAD;
 }
+
+// static irqreturn_t onic_user_thread_fn(int irq, void *dev_id)
+// {
+// 	struct onic_private *priv = dev_id;
+
+// 	dev_info(&priv->pdev->dev,
+// 		"User IRQ (BH) fired on Funtion#%05x: vector=%d\n",
+// 		PCI_FUNC(priv->pdev->devfn), irq);
+
+// 	return IRQ_HANDLED;
+// }
 
 static irqreturn_t onic_user_thread_fn(int irq, void *dev_id)
 {
 	struct onic_private *priv = dev_id;
+	int err;
 
-	dev_info(&priv->pdev->dev,
-		"User IRQ (BH) fired on Funtion#%05x: vector=%d\n",
-		PCI_FUNC(priv->pdev->devfn), irq);
+	if (!test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
+		return IRQ_HANDLED;
+
+	err = onic_pf_mbox_process_pending(priv);
+
+	/*
+	 * Re-enabling also checks events that arrived while the mailbox
+	 * interrupt source was disabled.
+	 */
+	onic_pf_mbox_irq_enable(priv);
+
+	if (err < 0)
+		dev_err(&priv->pdev->dev,
+			"PF mailbox processing failed, err=%d\n", err);
+	else if (err)
+		dev_info(&priv->pdev->dev,
+			 "PF mailbox processed %d event(s)\n", err);
 
 	return IRQ_HANDLED;
 }
@@ -225,6 +261,13 @@ int onic_init_interrupt(struct onic_private *priv)
 	if (!test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
 		return 0;
 
+	/*********************/
+	rv = onic_pf_mbox_irq_init(priv, vid);
+	if (rv < 0) {
+		dev_err(&pdev->dev, "Failed to initialize PF mailbox interrupt");
+		goto clear_interrupt;
+	}
+	/*********************/
 	vid++;
 	rv = request_threaded_irq(pci_irq_vector(pdev, vid),
 				  onic_error_handler, onic_error_thread_fn,
@@ -249,7 +292,8 @@ void onic_clear_interrupt(struct onic_private *priv)
 	int vid = (master_pf) ?
 		priv->num_q_vectors + 1 :
 		priv->num_q_vectors;
-
+	if (master_pf)
+		onic_pf_mbox_irq_disable(priv);
 	if (master_pf) {
 		if (test_bit(ONIC_ERROR_INTR, priv->state)) {
 			free_irq(pci_irq_vector(priv->pdev, vid), priv);
