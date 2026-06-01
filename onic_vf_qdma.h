@@ -5,5 +5,7 @@ struct onic_private;
 
 int onic_vf_qdma_init(struct onic_private *priv);
 void onic_vf_qdma_clear(struct onic_private *priv);
+int onic_vf_q_irq_init(struct onic_private *priv);
+void onic_vf_q_irq_clear(struct onic_private *priv);
 
 #endif

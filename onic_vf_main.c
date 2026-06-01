@@ -128,7 +128,8 @@ static int onic_vf_probe(struct pci_dev *pdev,
 
 	pci_set_master(pdev);
 
-	netdev = alloc_etherdev_mq(sizeof(struct onic_private), 1);
+	netdev = alloc_etherdev_mq(sizeof(struct onic_private),
+                           		ONIC_MAX_QUEUES);
 	if (!netdev) {
 		err = -ENOMEM;
 		goto err_release_regions;
@@ -155,7 +156,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		goto err_free_netdev;
 	}
 	vectors = pci_alloc_irq_vectors(pdev,
-				ONIC_VF_NON_Q_VECTORS,
+				ONIC_VF_NON_Q_VECTORS + 1,
 				ONIC_MAX_QUEUES + ONIC_VF_NON_Q_VECTORS,
 				PCI_IRQ_MSIX);
 	if (vectors < 0) {
@@ -181,6 +182,38 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	if (err) {
 		dev_err(&pdev->dev, "Failed to initialize VF QDMA state: %d\n", err);
 		goto err_clear_mbox_irq;
+	}
+	priv->num_q_vectors = min_t(u16, priv->num_q_vectors,
+								priv->vf_hw.qmax);
+	if (!priv->num_q_vectors) {
+		err = -ENOSPC;
+		goto err_clear_vf_qdma;
+	}
+
+	priv->vf_hw.num_tx_queues = priv->num_q_vectors;
+	priv->vf_hw.num_rx_queues = priv->num_q_vectors;
+
+	err = netif_set_real_num_tx_queues(netdev,
+									priv->vf_hw.num_tx_queues);
+	if (err)
+		goto err_clear_vf_qdma;
+
+	err = netif_set_real_num_rx_queues(netdev,
+									priv->vf_hw.num_rx_queues);
+	if (err)
+		goto err_clear_vf_qdma;
+
+	dev_info(&pdev->dev,
+			"VF active queues: tx=%u rx=%u q_vectors=%u\n",
+			priv->vf_hw.num_tx_queues,
+			priv->vf_hw.num_rx_queues,
+			priv->num_q_vectors);
+
+	err = onic_vf_q_irq_init(priv);
+	if (err) {
+		dev_err(&pdev->dev, "Failed to initialize VF queue IRQs: %d\n",
+				err);
+		goto err_clear_vf_qdma;
 	}
 	/*
 	 * Tạm thời VF chưa init datapath thật.
@@ -209,13 +242,15 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	err = register_netdev(netdev);
 	if (err) {
 		dev_err(&pdev->dev, "register_netdev failed: %d\n", err);
-		goto err_clear_vf_qdma;
+		goto err_clear_q_irqs;
 	}
 
 	dev_info(&pdev->dev, "OpenNIC VF probe success, netdev=%s\n",
 		 netdev->name);
 
 	return 0;
+err_clear_q_irqs:
+    onic_vf_q_irq_clear(priv);
 
 err_clear_vf_qdma:
 	onic_vf_qdma_clear(priv);
@@ -257,6 +292,7 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		unregister_netdev(netdev);
 
 	if (priv) {
+		onic_vf_q_irq_clear(priv);
 		onic_vf_qdma_clear(priv);
 		onic_vf_mbox_irq_clear(priv);
 		priv->num_q_vectors = 0;

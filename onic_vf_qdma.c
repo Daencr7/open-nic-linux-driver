@@ -34,7 +34,8 @@ static inline u16 onic_vf_global_qid(struct onic_private *priv, u16 local_qid)
 
 #include <linux/errno.h>
 #include <linux/slab.h>
-
+#include <linux/interrupt.h>
+#include <linux/pci.h>
 #include "onic.h"
 #include "onic_vf_qdma.h"
 #include "qdma_device.h"
@@ -89,4 +90,95 @@ void onic_vf_qdma_clear(struct onic_private *priv)
 	vf_hw->num_tx_queues = 0;
 	vf_hw->num_rx_queues = 0;
 	vf_hw->resource_valid = false;
+}
+
+static irqreturn_t onic_vf_q_irq_handler(int irq, void *data)
+{
+    struct onic_q_vector *vec = data;
+    struct onic_private *priv = vec->priv;
+
+    dev_dbg(&priv->pdev->dev,
+            "VF queue IRQ: local_qid=%u irq=%d\n",
+            vec->vid, irq);
+
+    /*
+     * Chưa schedule NAPI ở giai đoạn này vì RX queue chưa được tạo.
+     */
+    return IRQ_HANDLED;
+}
+
+static void onic_vf_clear_one_q_irq(struct onic_private *priv, u16 vid)
+{
+    struct onic_q_vector *vec = priv->q_vector[vid];
+
+    if (!vec)
+        return;
+
+    free_irq(pci_irq_vector(priv->pdev, vid), vec);
+    kfree(vec);
+    priv->q_vector[vid] = NULL;
+}
+
+static int onic_vf_init_one_q_irq(struct onic_private *priv, u16 vid)
+{
+    struct pci_dev *pdev = priv->pdev;
+    struct onic_q_vector *vec;
+    int irq;
+    int err;
+
+    vec = kzalloc(sizeof(*vec), GFP_KERNEL);
+    if (!vec)
+        return -ENOMEM;
+
+    vec->priv = priv;
+    vec->vid = vid;
+
+    irq = pci_irq_vector(pdev, vid);
+    if (irq < 0) {
+        kfree(vec);
+        return irq;
+    }
+
+    err = request_irq(irq, onic_vf_q_irq_handler, 0,
+                      "onic-vf-q", vec);
+    if (err) {
+        kfree(vec);
+        return err;
+    }
+
+    priv->q_vector[vid] = vec;
+
+    dev_info(&pdev->dev,
+             "Setup VF queue IRQ: local_qid=%u vector_index=%u irq=%d\n",
+             vid, vid, irq);
+
+    return 0;
+}
+
+int onic_vf_q_irq_init(struct onic_private *priv)
+{
+    int vid;
+    int err;
+
+    for (vid = 0; vid < priv->num_q_vectors; vid++) {
+        err = onic_vf_init_one_q_irq(priv, vid);
+        if (err)
+            goto err_clear;
+    }
+
+    return 0;
+
+err_clear:
+    while (vid--)
+        onic_vf_clear_one_q_irq(priv, vid);
+
+    return err;
+}
+
+void onic_vf_q_irq_clear(struct onic_private *priv)
+{
+    int vid;
+
+    for (vid = 0; vid < ONIC_MAX_QUEUES; vid++)
+        onic_vf_clear_one_q_irq(priv, vid);
 }

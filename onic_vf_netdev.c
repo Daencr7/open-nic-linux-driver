@@ -84,6 +84,6 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
 {
 	// netdev_info(netdev, "VF dummy TX packet len=%u, drop\n", skb->len);
 
-	// dev_kfree_skb_any(skb);
+	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
 }
