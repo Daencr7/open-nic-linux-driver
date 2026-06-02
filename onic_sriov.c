@@ -8,7 +8,7 @@
  */
 
 #include "onic_sriov.h"
-
+#include "onic_hardware.h"
 
 
 int onic_sriov_configure(struct pci_dev *pdev, int num_vfs)
@@ -116,7 +116,7 @@ void onic_free_vf_resources(struct onic_private *priv, int num_vfs)
 	struct qdma_dev *pf_qdev = (struct qdma_dev *)priv->hw.qdma;
 	int i;
 	int err;
-
+	u16 qid;
 	if (!pf_qdev)
 		return;
 
@@ -131,6 +131,13 @@ void onic_free_vf_resources(struct onic_private *priv, int num_vfs)
 		vf_qdev.pdev = priv->pdev;
 		vf_qdev.addr = pf_qdev->addr;
 		vf_qdev.func_id = priv->vf_res[i].func_id;
+		vf_qdev.q_base = priv->vf_res[i].qbase;
+		vf_qdev.num_queues = priv->vf_res[i].qmax;
+
+		for (qid = 0; qid < vf_qdev.num_queues; qid++) {
+			onic_qdma_clear_rx_queue((unsigned long)&vf_qdev, qid);
+			onic_qdma_clear_tx_queue((unsigned long)&vf_qdev, qid);
+		}
 
 		err = qdma_clear_fmap_ctxt(&vf_qdev);
 		if (err)

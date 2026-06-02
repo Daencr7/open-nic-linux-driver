@@ -21,10 +21,13 @@
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
 
-
+#include <linux/kernel.h>
+#include <linux/bitops.h>
 
 #include "onic.h"
 #include "onic_vf_qdma.h"
+#include "onic_mbox.h"
+#include "onic_vf_mbox.h"
 #include "qdma_device.h"
 #include "qdma_register.h"
 #include "qdma_export.h"
@@ -32,6 +35,8 @@
 #define ONIC_VF_TX_RING_COUNT       4096
 #define ONIC_VF_RX_RING_COUNT       1024
 #define ONIC_VF_CMPL_RING_COUNT     1024
+#define ONIC_VF_TX_RNGCNT_IDX       0
+#define ONIC_VF_TX_CTXT_CONFIGURED  31
 
 int onic_vf_qdma_init(struct onic_private *priv)
 {
@@ -303,6 +308,92 @@ err_free_dma:
 err_free_q:
     kfree(q);
     return -ENOMEM;
+}
+
+static int onic_vf_clear_one_tx_context(struct onic_private *priv, u16 qid)
+{
+    struct onic_tx_queue *q = priv->tx_queue[qid];
+    int err;
+
+    if (!q || !test_bit(ONIC_VF_TX_CTXT_CONFIGURED, q->state))
+        return 0;
+
+    err = onic_vf_mbox_clear_queue(priv, qid, ONIC_MBOX_QUEUE_DIR_TX);
+    if (err)
+        return err;
+
+    clear_bit(ONIC_VF_TX_CTXT_CONFIGURED, q->state);
+
+    dev_info(&priv->pdev->dev,
+             "VF TX context cleared: local_qid=%u global_qid=%u\n",
+             qid, priv->vf_hw.qbase + qid);
+
+    return 0;
+}
+
+static int onic_vf_config_one_tx_context(struct onic_private *priv, u16 qid)
+{
+    struct onic_tx_queue *q = priv->tx_queue[qid];
+    struct onic_mbox_queue_cfg cfg = {0};
+    int err;
+
+    if (!q || !q->vector)
+        return -EINVAL;
+
+    if (test_bit(ONIC_VF_TX_CTXT_CONFIGURED, q->state))
+        return -EALREADY;
+
+    cfg.qid = qid;
+    cfg.dir = ONIC_MBOX_QUEUE_DIR_TX;
+    cfg.vector = q->vector->vid;
+    cfg.rngcnt_idx = ONIC_VF_TX_RNGCNT_IDX;
+    cfg.desc_dma_lo = lower_32_bits(q->ring.dma_addr);
+    cfg.desc_dma_hi = upper_32_bits(q->ring.dma_addr);
+
+    err = onic_vf_mbox_config_queue(priv, &cfg);
+    if (err)
+        return err;
+
+    set_bit(ONIC_VF_TX_CTXT_CONFIGURED, q->state);
+
+    dev_info(&priv->pdev->dev,
+             "VF TX context configured: local_qid=%u global_qid=%u vector=%u\n",
+             qid, priv->vf_hw.qbase + qid, cfg.vector);
+
+    return 0;
+}
+
+int onic_vf_tx_contexts_clear(struct onic_private *priv)
+{
+    int first_err = 0;
+    int err;
+    u16 qid;
+
+    for (qid = 0; qid < priv->num_tx_queues; qid++) {
+        err = onic_vf_clear_one_tx_context(priv, qid);
+        if (err && !first_err)
+            first_err = err;
+    }
+
+    return first_err;
+}
+
+int onic_vf_tx_contexts_init(struct onic_private *priv)
+{
+    u16 qid;
+    int err;
+
+    for (qid = 0; qid < priv->num_tx_queues; qid++) {
+        err = onic_vf_config_one_tx_context(priv, qid);
+        if (err)
+            goto err_clear;
+    }
+
+    return 0;
+
+err_clear:
+    onic_vf_tx_contexts_clear(priv);
+    return err;
 }
 
 static void onic_vf_free_rx_ring(struct onic_private *priv, u16 qid)

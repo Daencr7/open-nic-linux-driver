@@ -149,6 +149,115 @@ static int onic_vf_mbox_drop_stale_responses(struct onic_private *priv)
 	return -EIO;
 }
 
+static int
+onic_vf_mbox_send_queue_cmd(struct onic_private *priv,
+			    const struct onic_mbox_msg *request,
+			    u32 response_opcode, u32 qid, u32 dir)
+{
+	struct onic_vf_hardware *vf_hw = &priv->vf_hw;
+	struct onic_mbox_msg req = *request;
+	struct onic_mbox_msg *resp = &vf_hw->mbox_resp;
+	unsigned long timeout;
+	u32 status;
+	int err = 0;
+
+	mutex_lock(&vf_hw->mbox_lock);
+
+	err = onic_vf_mbox_drop_stale_responses(priv);
+	if (err < 0)
+		goto out_unlock;
+
+	status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
+	if (status & QDMA_MBOX_STS_O_MSG_MASK) {
+		err = -EBUSY;
+		goto out_unlock;
+	}
+
+	req.hdr.seq = ++vf_hw->mbox_seq;
+
+	reinit_completion(&vf_hw->mbox_done);
+	memset(resp, 0, sizeof(*resp));
+
+	onic_vf_mbox_write_msg(priv, QDMA_VF_MBOX_OUT_MSG, &req);
+	onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD, QDMA_MBOX_CMD_SEND);
+
+	timeout = wait_for_completion_timeout(&vf_hw->mbox_done,
+					      msecs_to_jiffies(1000));
+	if (!timeout) {
+		status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
+
+		dev_warn(&priv->pdev->dev,
+			 "VF queue mailbox timeout: opcode=%u qid=%u dir=%u sts=0x%08x\n",
+			 req.hdr.opcode, qid, dir, status);
+
+		/*
+		 * Bring-up fallback while VF mailbox MSI-X routing is not fixed.
+		 */
+		if (status & QDMA_MBOX_STS_I_MSG_MASK) {
+			err = onic_vf_mbox_process_one(priv);
+			if (err > 0) {
+				err = 0;
+				goto validate_response;
+			}
+			if (err < 0)
+				goto out_unlock;
+		}
+
+		err = -ETIMEDOUT;
+		goto out_unlock;
+	}
+
+validate_response:
+	if (resp->hdr.opcode != response_opcode ||
+	    resp->hdr.seq != req.hdr.seq ||
+	    resp->hdr.len != sizeof(resp->data.qcmd_resp) ||
+	    resp->data.qcmd_resp.qid != qid ||
+	    resp->data.qcmd_resp.dir != dir) {
+		err = -EPROTO;
+		goto out_unlock;
+	}
+
+	if (resp->hdr.status != ONIC_MBOX_STS_OK) {
+		err = -EIO;
+		goto out_unlock;
+	}
+
+out_unlock:
+	mutex_unlock(&vf_hw->mbox_lock);
+	return err;
+}
+
+int onic_vf_mbox_config_queue(struct onic_private *priv,
+			      const struct onic_mbox_queue_cfg *cfg)
+{
+	struct onic_mbox_msg req = {0};
+
+	if (!cfg)
+		return -EINVAL;
+
+	req.hdr.opcode = ONIC_MBOX_OP_CONFIG_QUEUE;
+	req.hdr.len = sizeof(req.data.qcfg);
+	req.data.qcfg = *cfg;
+
+	return onic_vf_mbox_send_queue_cmd(priv, &req,
+					   ONIC_MBOX_OP_CONFIG_QUEUE_RESP,
+					   cfg->qid, cfg->dir);
+}
+
+int onic_vf_mbox_clear_queue(struct onic_private *priv, u16 qid, u32 dir)
+{
+	struct onic_mbox_msg req = {0};
+
+	req.hdr.opcode = ONIC_MBOX_OP_CLEAR_QUEUE;
+	req.hdr.len = sizeof(req.data.qclear);
+	req.data.qclear.qid = qid;
+	req.data.qclear.dir = dir;
+
+	return onic_vf_mbox_send_queue_cmd(priv, &req,
+					   ONIC_MBOX_OP_CLEAR_QUEUE_RESP,
+					   qid, dir);
+}
+
 int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 {
 	struct onic_vf_hardware *vf_hw = &priv->vf_hw;

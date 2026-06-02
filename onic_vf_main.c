@@ -301,8 +301,12 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		unregister_netdev(netdev);
 
 	if (priv) {
-		onic_vf_rings_clear(priv);
-		onic_vf_q_irq_clear(priv);
+        if (onic_vf_tx_contexts_clear(priv))
+            dev_warn(&pdev->dev,
+                     "Failed to clear VF TX contexts during remove\n");
+
+        onic_vf_rings_clear(priv);
+        onic_vf_q_irq_clear(priv);
 		onic_vf_qdma_clear(priv);
 		onic_vf_mbox_irq_clear(priv);
 		priv->num_q_vectors = 0;
