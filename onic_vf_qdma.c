@@ -20,7 +20,15 @@
 #include <linux/pci.h>
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
+#include <linux/version.h>
+#include <linux/err.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <net/page_pool/helpers.h>
+#include <net/page_pool/types.h>
+#else
+#include <net/page_pool.h>
+#endif
 #include <linux/kernel.h>
 #include <linux/bitops.h>
 
@@ -396,6 +404,55 @@ err_clear:
     return err;
 }
 
+static int onic_vf_create_rx_page_pool(struct onic_private *priv,
+                                       struct onic_rx_queue *q, u16 size)
+{
+    struct page_pool_params params = {
+        .order = 0,
+        .flags = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV,
+        .pool_size = size,
+        .nid = dev_to_node(&priv->pdev->dev),
+        .dev = &priv->pdev->dev,
+        .dma_dir = DMA_FROM_DEVICE,
+        .offset = XDP_PACKET_HEADROOM,
+        .max_len = priv->netdev->mtu + ETH_HLEN,
+    };
+    int err;
+
+    q->page_pool = page_pool_create(&params);
+    if (IS_ERR(q->page_pool)) {
+        err = PTR_ERR(q->page_pool);
+        q->page_pool = NULL;
+        return err;
+    }
+
+    return 0;
+}
+
+static void onic_vf_free_rx_pages(struct onic_rx_queue *q)
+{
+    u16 real_count;
+    int i;
+
+    if (!q->page_pool)
+        return;
+
+    real_count = q->desc_ring.count - 1;
+
+    if (q->buffer) {
+        for (i = 0; i < real_count; i++) {
+            if (!q->buffer[i].pg)
+                continue;
+
+            page_pool_put_full_page(q->page_pool, q->buffer[i].pg, false);
+            q->buffer[i].pg = NULL;
+        }
+    }
+
+    page_pool_destroy(q->page_pool);
+    q->page_pool = NULL;
+}
+
 static void onic_vf_free_rx_ring(struct onic_private *priv, u16 qid)
 {
     struct onic_rx_queue *q = priv->rx_queue[qid];
@@ -415,7 +472,7 @@ static void onic_vf_free_rx_ring(struct onic_private *priv, u16 qid)
     if (q->cmpl_ring.desc)
         dma_free_coherent(&priv->pdev->dev, size, q->cmpl_ring.desc,
                           q->cmpl_ring.dma_addr);
-
+    onic_vf_free_rx_pages(q);
     kfree(q->buffer);
     kfree(q);
     priv->rx_queue[qid] = NULL;
@@ -426,6 +483,8 @@ static int onic_vf_alloc_rx_ring(struct onic_private *priv, u16 qid)
     struct onic_rx_queue *q;
     size_t size;
     u16 real_count;
+    int i;
+    int err = -ENOMEM;
 
     q = kzalloc(sizeof(*q), GFP_KERNEL);
     if (!q)
@@ -454,6 +513,33 @@ static int onic_vf_alloc_rx_ring(struct onic_private *priv, u16 qid)
     if (!q->buffer)
         goto err_free_desc;
 
+    err = onic_vf_create_rx_page_pool(priv, q, real_count);
+    if (err)
+        goto err_free_buffer;
+
+    for (i = 0; i < real_count; i++) {
+        struct qdma_c2h_st_desc desc;
+        struct page *pg;
+        u8 *desc_ptr;
+
+        pg = page_pool_dev_alloc_pages(q->page_pool);
+        if (!pg) {
+            err = -ENOMEM;
+            goto err_free_pages;
+        }
+
+        q->buffer[i].pg = pg;
+        q->buffer[i].offset = XDP_PACKET_HEADROOM;
+
+        desc.dst_addr = page_pool_get_dma_addr(pg) + XDP_PACKET_HEADROOM;
+        desc_ptr = q->desc_ring.desc + QDMA_C2H_ST_DESC_SIZE * i;
+        qdma_pack_c2h_st_desc(desc_ptr, &desc);
+    }
+
+    dev_info(&priv->pdev->dev,
+             "VF RX descriptors prepared: local_qid=%u pages=%u\n",
+             qid, real_count);
+
     q->cmpl_ring.count = ONIC_VF_CMPL_RING_COUNT;
     size = onic_vf_ring_bytes(q->cmpl_ring.count, QDMA_C2H_CMPL_SIZE,
                               QDMA_C2H_CMPL_STAT_SIZE);
@@ -462,7 +548,7 @@ static int onic_vf_alloc_rx_ring(struct onic_private *priv, u16 qid)
                                            &q->cmpl_ring.dma_addr,
                                            GFP_KERNEL);
     if (!q->cmpl_ring.desc)
-        goto err_free_buffer;
+        goto err_free_pages;
 
     memset(q->cmpl_ring.desc, 0, size);
     q->cmpl_ring.wb =
@@ -473,6 +559,8 @@ static int onic_vf_alloc_rx_ring(struct onic_private *priv, u16 qid)
     priv->rx_queue[qid] = q;
     return 0;
 
+err_free_pages:
+    onic_vf_free_rx_pages(q);
 err_free_buffer:
     kfree(q->buffer);
 err_free_desc:
@@ -483,7 +571,8 @@ err_free_desc:
                       q->desc_ring.dma_addr);
 err_free_q:
     kfree(q);
-    return -ENOMEM;
+    
+    return err;
 }
 
 int onic_vf_rings_init(struct onic_private *priv)

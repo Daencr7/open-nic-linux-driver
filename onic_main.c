@@ -163,7 +163,7 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	struct sockaddr saddr;
 	char dev_name[IFNAMSIZ];
 	int rv;
-	u32 ts;
+	// u32 ts;
 #ifdef CMS_SUPPORT
         static int xmc_init=0;
 #endif
@@ -286,8 +286,8 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	
 
-	ts = onic_read_reg(&priv->hw, 0x0);
-	dev_info(&pdev->dev, "PF BAR2 build timestamp[0x0] = 0x%08x\n", ts);
+	// ts = onic_read_reg(&priv->hw, 0x0);
+	// dev_info(&pdev->dev, "PF BAR2 build timestamp[0x0] = 0x%08x\n", ts);
 	return 0;
 
 clear_interrupt:

@@ -109,20 +109,20 @@ static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 		"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
 		PCI_FUNC(priv->pdev->devfn), irq);
 
-	dev_err(&priv->pdev->dev,
-		"PF mbox: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
-		mbox_status,
-		qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
-		qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+	// dev_err(&priv->pdev->dev,
+	// 	"PF mbox: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+	// 	mbox_status,
+	// 	qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
+	// 	qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 
-	dev_err(&priv->pdev->dev,
-		"QDMA err: glbl=0x%08x dsc=0x%08x trq=0x%08x c2h=0x%08x h2c=0x%08x err_int=0x%08x\n",
-		qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_STAT),
-		qdma_read_reg(qdev, QDMA_OFFSET_GLBL_DSC_ERR_STS),
-		qdma_read_reg(qdev, QDMA_OFFSET_GLBL_TRQ_ERR_STS),
-		qdma_read_reg(qdev, QDMA_OFFSET_C2H_ERR_STAT),
-		qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT),
-		qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_INT));
+	// dev_err(&priv->pdev->dev,
+	// 	"QDMA err: glbl=0x%08x dsc=0x%08x trq=0x%08x c2h=0x%08x h2c=0x%08x err_int=0x%08x\n",
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_STAT),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_DSC_ERR_STS),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_TRQ_ERR_STS),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_C2H_ERR_STAT),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_INT));
 
 	if (mbox_status & (QDMA_MBOX_STS_I_MSG_MASK |
 			   QDMA_MBOX_STS_ACK_MASK)) {
