@@ -31,4 +31,7 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
 				      struct net_device *netdev);
 
 
+void onic_vf_get_stats64(struct net_device *netdev,
+                         struct rtnl_link_stats64 *stats);
+
 #endif /* ONIC_VF_NETDEV_H */

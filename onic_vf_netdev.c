@@ -36,7 +36,7 @@ Sau đó mới nối datapath thật.
 #include <linux/bpf.h>
 #include <linux/filter.h>
 #include <linux/bpf_trace.h>
-
+#include <linux/percpu.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include <net/page_pool/helpers.h>
 #include <net/page_pool/types.h>
@@ -137,6 +137,28 @@ int onic_vf_stop_netdev(struct net_device *netdev)
     return 0;
 }
 
+void onic_vf_get_stats64(struct net_device *netdev,
+                         struct rtnl_link_stats64 *stats)
+{
+    struct onic_private *priv = netdev_priv(netdev);
+    struct rtnl_link_stats64 *pcpu;
+    unsigned int cpu;
+
+    memset(stats, 0, sizeof(*stats));
+
+    for_each_possible_cpu(cpu) {
+        pcpu = per_cpu_ptr(priv->netdev_stats, cpu);
+        stats->rx_packets += pcpu->rx_packets;
+        stats->rx_bytes += pcpu->rx_bytes;
+        stats->rx_errors += pcpu->rx_errors;
+        stats->rx_dropped += pcpu->rx_dropped;
+        stats->tx_packets += pcpu->tx_packets;
+        stats->tx_bytes += pcpu->tx_bytes;
+        stats->tx_errors += pcpu->tx_errors;
+        stats->tx_dropped += pcpu->tx_dropped;
+    }
+}
+
 static u16 onic_vf_tx_ring_real_count(const struct onic_ring *ring)
 {
     return ring->count - 1;
@@ -167,6 +189,7 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
                                struct net_device *netdev)
 {
     struct onic_private *priv = netdev_priv(netdev);
+    struct rtnl_link_stats64 *stats = this_cpu_ptr(priv->netdev_stats);
     struct onic_tx_queue *q;
     struct onic_ring *ring;
     struct qdma_h2c_st_desc desc;
@@ -175,6 +198,8 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
     u16 qid;
 
     if (unlikely(!priv->num_tx_queues)) {
+        stats->tx_dropped++;
+        stats->tx_errors++;
         dev_kfree_skb_any(skb);
         return NETDEV_TX_OK;
     }
@@ -183,6 +208,8 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
     q = READ_ONCE(priv->tx_queue[qid]);
 
     if (unlikely(!q || !q->ring.desc)) {
+        stats->tx_dropped++;
+        stats->tx_errors++;
         dev_kfree_skb_any(skb);
         return NETDEV_TX_OK;
     }
@@ -193,12 +220,17 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
     if (unlikely(onic_vf_tx_ring_full(ring)))
         return NETDEV_TX_BUSY;
 
-    if (unlikely(skb_put_padto(skb, ETH_ZLEN)))
+    if (unlikely(skb_put_padto(skb, ETH_ZLEN))) {
+        stats->tx_dropped++;
+        stats->tx_errors++;
         return NETDEV_TX_OK;
+    }
 
     dma_addr = dma_map_single(&priv->pdev->dev, skb->data, skb->len,
                               DMA_TO_DEVICE);
     if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr))) {
+        stats->tx_dropped++;
+        stats->tx_errors++;
         dev_kfree_skb_any(skb);
         return NETDEV_TX_OK;
     }
@@ -215,10 +247,17 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
     q->buffer[ring->next_to_use].dma_addr = dma_addr;
     q->buffer[ring->next_to_use].len = skb->len;
 
+    stats->tx_packets++;
+    stats->tx_bytes += skb->len;
+
     onic_vf_tx_ring_increment_head(ring);
 
     dma_wmb();
     onic_vf_set_tx_head(priv, qid, ring->next_to_use);
+
+    dev_info_ratelimited(&priv->pdev->dev,
+                        "VF TX submitted: local_qid=%u pidx=%u len=%u\n",
+                        qid, ring->next_to_use, desc.len);
 
     return NETDEV_TX_OK;
 }

@@ -23,7 +23,7 @@
 #include <linux/mm.h>
 #include <linux/version.h>
 #include <linux/err.h>
-
+#include <linux/percpu.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include <net/page_pool/helpers.h>
 #include <net/page_pool/types.h>
@@ -305,7 +305,10 @@ void onic_vf_tx_clean(struct onic_private *priv, struct onic_tx_queue *q)
         onic_vf_ring_increment_clean(ring);
         work++;
     }
-
+    if (work)
+        dev_info_ratelimited(&priv->pdev->dev,
+                            "VF TX cleaned: local_qid=%u count=%u cidx=%u\n",
+                            q->qid, work, wb.cidx);
     if (ring->next_to_clean != wb.cidx)
         dev_warn_ratelimited(&priv->pdev->dev,
                              "Invalid VF TX writeback: qid=%u cidx=%u\n",
@@ -366,6 +369,7 @@ static int onic_vf_rx_poll(struct napi_struct *napi, int budget)
     struct onic_ring *cmpl_ring = &q->cmpl_ring;
     struct qdma_c2h_cmpl_stat stat;
     int work = 0;
+    struct rtnl_link_stats64 *stats = this_cpu_ptr(priv->netdev_stats);
     if (q->qid < priv->num_tx_queues)
         onic_vf_tx_clean(priv, READ_ONCE(priv->tx_queue[q->qid]));
     dma_rmb();
@@ -392,12 +396,15 @@ static int onic_vf_rx_poll(struct napi_struct *napi, int budget)
                                     "Invalid VF RX completion: qid=%u len=%u err=%u color=%u expected=%u\n",
                                     q->qid, cmpl.pkt_len, cmpl.err,
                                     cmpl.color, cmpl_ring->color);
+                stats->rx_errors++;
             break;
         }
 
         new_pg = page_pool_dev_alloc_pages(q->page_pool);
-        if (!new_pg)
+        if (!new_pg){
+            stats->rx_dropped++;
             break;
+        }
 
         dma_sync_single_for_cpu(&priv->pdev->dev,
                                 page_pool_get_dma_addr(buf->pg) + buf->offset,
@@ -406,6 +413,7 @@ static int onic_vf_rx_poll(struct napi_struct *napi, int budget)
         skb = napi_build_skb(page_address(buf->pg), PAGE_SIZE);
         if (!skb) {
             page_pool_put_full_page(q->page_pool, new_pg, false);
+            stats->rx_dropped++;
             break;
         }
 
@@ -427,6 +435,8 @@ static int onic_vf_rx_poll(struct napi_struct *napi, int budget)
         if (!cmpl_ring->next_to_clean)
             cmpl_ring->color ^= 1;
 
+        stats->rx_packets++;
+        stats->rx_bytes += cmpl.pkt_len;
         napi_gro_receive(napi, skb);
         work++;
         onic_vf_rx_refill_credit(priv, q);

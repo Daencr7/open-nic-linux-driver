@@ -15,6 +15,8 @@
 #include <linux/netdevice.h>
 #include <linux/moduleparam.h>
 #include <linux/bpf.h>
+#include <linux/percpu.h>
+
 #include "onic.h"
 #include "onic_vf_netdev.h"
 #include "onic_vf_hw.h"
@@ -88,7 +90,7 @@ static const struct net_device_ops onic_vf_netdev_ops = {
 	// .ndo_set_mac_address = onic_set_mac_address,
 	// .ndo_do_ioctl = onic_do_ioctl,
 	// .ndo_change_mtu = onic_change_mtu,
-	// .ndo_get_stats64 = onic_get_stats64,
+	.ndo_get_stats64 = onic_vf_get_stats64,
 	// .ndo_bpf = onic_xdp,
 };
 
@@ -102,6 +104,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	int err;
 	int vectors;
 	// u32 build_ts;
+	int cpu;
 
 	dev_info(&pdev->dev, "OpenNIC VF probe start\n");
 
@@ -148,6 +151,16 @@ static int onic_vf_probe(struct pci_dev *pdev,
 
 	priv->pdev = pdev;
 	priv->netdev = netdev;
+
+	priv->netdev_stats = alloc_percpu(struct rtnl_link_stats64);
+	if (!priv->netdev_stats) {
+		err = -ENOMEM;
+		goto err_free_netdev;
+	}
+
+	for_each_possible_cpu(cpu)
+		memset(per_cpu_ptr(priv->netdev_stats, cpu), 0,
+			sizeof(struct rtnl_link_stats64));
 
 	pci_set_drvdata(pdev, priv);
 	// pci_set_drvdata(pdev, pdev); /* VF chưa có private data vì chưa init datapath thật */
@@ -275,6 +288,10 @@ err_unmap_bars:
 	onic_vf_unmap_bars(priv);
 
 err_free_netdev:
+	if (priv->netdev_stats) {
+		free_percpu(priv->netdev_stats);
+		priv->netdev_stats = NULL;
+	}
 	pci_set_drvdata(pdev, NULL);
 	free_netdev(netdev);
 
@@ -318,6 +335,10 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		priv->num_q_vectors = 0;
 		pci_free_irq_vectors(pdev);
 		onic_vf_unmap_bars(priv);
+		if (priv->netdev_stats) {
+			free_percpu(priv->netdev_stats);
+			priv->netdev_stats = NULL;
+		}
 	}
 
 	pci_set_drvdata(pdev, NULL);
