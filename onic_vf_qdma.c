@@ -18,6 +18,7 @@
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/pci.h>
+#include <linux/etherdevice.h>
 #include <linux/dma-mapping.h>
 #include <linux/mm.h>
 #include <linux/version.h>
@@ -268,6 +269,76 @@ static void onic_vf_ring_increment_clean(struct onic_ring *ring)
         ring->next_to_clean = 0;
 }
 
+void onic_vf_tx_clean(struct onic_private *priv, struct onic_tx_queue *q)
+{
+    struct onic_ring *ring;
+    struct qdma_wb_stat wb;
+    u16 real_count;
+    u16 work = 0;
+
+    if (!q || !q->ring.wb || !q->buffer)
+        return;
+
+    if (test_and_set_bit(0, q->state))
+        return;
+
+    ring = &q->ring;
+    real_count = onic_vf_ring_real_count(ring);
+
+    dma_rmb();
+    qdma_unpack_wb_stat(&wb, ring->wb);
+
+    while (ring->next_to_clean != wb.cidx && work < real_count) {
+        struct onic_tx_buffer *buf = &q->buffer[ring->next_to_clean];
+
+        if (buf->type == ONIC_TX_SKB && buf->skb) {
+            dma_unmap_single(&priv->pdev->dev, buf->dma_addr,
+                             buf->len, DMA_TO_DEVICE);
+            dev_kfree_skb_any(buf->skb);
+        } else if (buf->type) {
+            dev_warn_ratelimited(&priv->pdev->dev,
+                                 "Unexpected VF TX buffer type=%u qid=%u\n",
+                                 buf->type, q->qid);
+        }
+
+        memset(buf, 0, sizeof(*buf));
+        onic_vf_ring_increment_clean(ring);
+        work++;
+    }
+
+    if (ring->next_to_clean != wb.cidx)
+        dev_warn_ratelimited(&priv->pdev->dev,
+                             "Invalid VF TX writeback: qid=%u cidx=%u\n",
+                             q->qid, wb.cidx);
+
+    clear_bit(0, q->state);
+}
+
+static void onic_vf_release_pending_tx(struct onic_private *priv,
+                                       struct onic_tx_queue *q)
+{
+    u16 real_count;
+    u16 i;
+
+    if (!q || !q->buffer)
+        return;
+
+    onic_vf_tx_clean(priv, q);
+    real_count = onic_vf_ring_real_count(&q->ring);
+
+    for (i = 0; i < real_count; i++) {
+        struct onic_tx_buffer *buf = &q->buffer[i];
+
+        if (buf->type != ONIC_TX_SKB || !buf->skb)
+            continue;
+
+        dma_unmap_single(&priv->pdev->dev, buf->dma_addr,
+                         buf->len, DMA_TO_DEVICE);
+        dev_kfree_skb_any(buf->skb);
+        memset(buf, 0, sizeof(*buf));
+    }
+}
+
 static void onic_vf_rx_refill_credit(struct onic_private *priv,
                                      struct onic_rx_queue *q)
 {
@@ -295,7 +366,8 @@ static int onic_vf_rx_poll(struct napi_struct *napi, int budget)
     struct onic_ring *cmpl_ring = &q->cmpl_ring;
     struct qdma_c2h_cmpl_stat stat;
     int work = 0;
-
+    if (q->qid < priv->num_tx_queues)
+        onic_vf_tx_clean(priv, READ_ONCE(priv->tx_queue[q->qid]));
     dma_rmb();
     qdma_unpack_c2h_cmpl_stat(&stat, cmpl_ring->wb);
 
@@ -384,7 +456,7 @@ static void onic_vf_free_tx_ring(struct onic_private *priv, u16 qid)
 
     if (!q)
         return;
-
+    onic_vf_release_pending_tx(priv, q);
     size = onic_vf_ring_bytes(q->ring.count, QDMA_H2C_ST_DESC_SIZE,
                               QDMA_WB_STAT_SIZE);
     if (q->ring.desc)

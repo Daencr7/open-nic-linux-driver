@@ -48,6 +48,8 @@ Sau đó mới nối datapath thật.
 // #include "onic_hardware.h"
 // #include "qdma_access/qdma_register.h"
 // #include "onic.h"
+#include <linux/dma-mapping.h>
+#include "qdma_export.h"
 #include "onic_vf_netdev.h"
 #include "onic.h"
 #include "onic_vf_qdma.h"
@@ -95,7 +97,8 @@ int onic_vf_open_netdev(struct net_device *netdev)
         return err;
     }
 
-    netif_carrier_off(netdev);
+    netif_tx_start_all_queues(netdev);
+    netif_carrier_on(netdev);
 
     return 0;
 }
@@ -134,15 +137,88 @@ int onic_vf_stop_netdev(struct net_device *netdev)
     return 0;
 }
 
+static u16 onic_vf_tx_ring_real_count(const struct onic_ring *ring)
+{
+    return ring->count - 1;
+}
+
+static bool onic_vf_tx_ring_full(const struct onic_ring *ring)
+{
+    u16 next = ring->next_to_use + 1;
+
+    if (next == onic_vf_tx_ring_real_count(ring))
+        next = 0;
+
+    return next == ring->next_to_clean;
+}
+
+static void onic_vf_tx_ring_increment_head(struct onic_ring *ring)
+{
+    ring->next_to_use++;
+
+    if (ring->next_to_use == onic_vf_tx_ring_real_count(ring))
+        ring->next_to_use = 0;
+}
 /**
  * Need to developemt
  * - transmit packet
  */
 netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
-				      struct net_device *netdev)
+                               struct net_device *netdev)
 {
-	// netdev_info(netdev, "VF dummy TX packet len=%u, drop\n", skb->len);
+    struct onic_private *priv = netdev_priv(netdev);
+    struct onic_tx_queue *q;
+    struct onic_ring *ring;
+    struct qdma_h2c_st_desc desc;
+    dma_addr_t dma_addr;
+    u8 *desc_ptr;
+    u16 qid;
 
-	dev_kfree_skb_any(skb);
-	return NETDEV_TX_OK;
+    if (unlikely(!priv->num_tx_queues)) {
+        dev_kfree_skb_any(skb);
+        return NETDEV_TX_OK;
+    }
+
+    qid = skb_get_queue_mapping(skb) % priv->num_tx_queues;
+    q = READ_ONCE(priv->tx_queue[qid]);
+
+    if (unlikely(!q || !q->ring.desc)) {
+        dev_kfree_skb_any(skb);
+        return NETDEV_TX_OK;
+    }
+
+    ring = &q->ring;
+    onic_vf_tx_clean(priv, q);
+
+    if (unlikely(onic_vf_tx_ring_full(ring)))
+        return NETDEV_TX_BUSY;
+
+    if (unlikely(skb_put_padto(skb, ETH_ZLEN)))
+        return NETDEV_TX_OK;
+
+    dma_addr = dma_map_single(&priv->pdev->dev, skb->data, skb->len,
+                              DMA_TO_DEVICE);
+    if (unlikely(dma_mapping_error(&priv->pdev->dev, dma_addr))) {
+        dev_kfree_skb_any(skb);
+        return NETDEV_TX_OK;
+    }
+
+    desc.metadata = skb->len;
+    desc.len = skb->len;
+    desc.src_addr = dma_addr;
+
+    desc_ptr = ring->desc + QDMA_H2C_ST_DESC_SIZE * ring->next_to_use;
+    qdma_pack_h2c_st_desc(desc_ptr, &desc);
+
+    q->buffer[ring->next_to_use].type = ONIC_TX_SKB;
+    q->buffer[ring->next_to_use].skb = skb;
+    q->buffer[ring->next_to_use].dma_addr = dma_addr;
+    q->buffer[ring->next_to_use].len = skb->len;
+
+    onic_vf_tx_ring_increment_head(ring);
+
+    dma_wmb();
+    onic_vf_set_tx_head(priv, qid, ring->next_to_use);
+
+    return NETDEV_TX_OK;
 }
