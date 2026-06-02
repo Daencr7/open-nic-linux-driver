@@ -17,7 +17,8 @@ int onic_vf_tx_contexts_init(struct onic_private *priv);
 int onic_vf_tx_contexts_clear(struct onic_private *priv);
 int onic_vf_rx_contexts_init(struct onic_private *priv);
 int onic_vf_rx_contexts_clear(struct onic_private *priv);
-
+int onic_vf_rx_datapath_init(struct onic_private *priv);
+void onic_vf_rx_datapath_clear(struct onic_private *priv);
 
 int onic_vf_rings_init(struct onic_private *priv);
 void onic_vf_rings_clear(struct onic_private *priv);

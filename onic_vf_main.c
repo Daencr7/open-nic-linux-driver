@@ -301,6 +301,8 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		unregister_netdev(netdev);
 
 	if (priv) {
+		onic_vf_rx_datapath_clear(priv);
+		
 		if (onic_vf_rx_contexts_clear(priv))
             dev_warn(&pdev->dev,
                      "Failed to clear VF RX contexts during remove\n");
