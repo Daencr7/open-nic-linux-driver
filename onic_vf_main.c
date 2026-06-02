@@ -239,7 +239,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 
 
 	netdev->min_mtu = ETH_MIN_MTU;
-	netdev->max_mtu = 9000;
+	netdev->max_mtu = ETH_DATA_LEN;
 
 	// Have not implemented XDP for VF yet, so disable it for now
 	netif_carrier_off(netdev);
@@ -301,6 +301,10 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		unregister_netdev(netdev);
 
 	if (priv) {
+		if (onic_vf_rx_contexts_clear(priv))
+            dev_warn(&pdev->dev,
+                     "Failed to clear VF RX contexts during remove\n");
+
         if (onic_vf_tx_contexts_clear(priv))
             dev_warn(&pdev->dev,
                      "Failed to clear VF TX contexts during remove\n");

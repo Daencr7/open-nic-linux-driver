@@ -104,7 +104,7 @@ struct onic_tx_queue {
 struct onic_rx_queue {
 	struct net_device *netdev;
 	u16 qid;
-
+	DECLARE_BITMAP(state, 32);
 	struct onic_rx_buffer *buffer;
 	struct onic_ring desc_ring;
 	struct onic_ring cmpl_ring;

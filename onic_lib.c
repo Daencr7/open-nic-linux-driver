@@ -105,9 +105,9 @@ static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)
 
 	mbox_status = qdma_read_reg(qdev, QDMA_PF_MBOX_STS);
 
-	dev_err(&priv->pdev->dev,
-		"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
-		PCI_FUNC(priv->pdev->devfn), irq);
+	// dev_err(&priv->pdev->dev,
+	// 	"Error IRQ (BH) fired on Funtion#%05x: vector=%d\n",
+	// 	PCI_FUNC(priv->pdev->devfn), irq);
 
 	// dev_err(&priv->pdev->dev,
 	// 	"PF mbox: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",

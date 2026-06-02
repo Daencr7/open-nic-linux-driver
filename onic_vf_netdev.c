@@ -77,7 +77,17 @@ int onic_vf_open_netdev(struct net_device *netdev)
         return err;
     }
 
+    err = onic_vf_rx_contexts_init(priv);
+    if (err) {
+        netdev_err(netdev, "Failed to configure VF RX contexts: %d\n",
+                   err);
+        onic_vf_tx_contexts_clear(priv);
+        onic_vf_rings_clear(priv);
+        return err;
+    }
+
     netif_carrier_off(netdev);
+
     return 0;
 }
 /** 
@@ -93,6 +103,14 @@ int onic_vf_stop_netdev(struct net_device *netdev)
     netif_carrier_off(netdev);
     
     netif_tx_stop_all_queues(netdev);
+    
+    err = onic_vf_rx_contexts_clear(priv);
+    if (err) {
+        netdev_err(netdev,
+                   "Failed to clear VF RX contexts, rings retained: %d\n",
+                   err);
+        return err;
+    }
 
     err = onic_vf_tx_contexts_clear(priv);
     if (err) {
