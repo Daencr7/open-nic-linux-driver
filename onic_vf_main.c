@@ -111,13 +111,19 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		return err;
 	}
 
-	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	err = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
+	if (err)
+		err = dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
 	if (err) {
-		err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
-		if (err) {
-			dev_err(&pdev->dev, "DMA mask setup failed: %d\n", err);
-			goto err_disable_device;
-		}
+		dev_err(&pdev->dev, "DMA mask setup failed: %d\n", err);
+		goto err_disable_device;
+	}
+
+	/* QDMA descriptor rings require 32-bit coherent DMA addresses. */
+	err = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
+	if (err) {
+		dev_err(&pdev->dev, "Coherent DMA mask setup failed: %d\n", err);
+		goto err_disable_device;
 	}
 
 	err = pci_request_mem_regions(pdev, onic_drv_name);
@@ -190,6 +196,9 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		goto err_clear_vf_qdma;
 	}
 
+	priv->num_tx_queues = priv->num_q_vectors;
+	priv->num_rx_queues = priv->num_q_vectors;
+	
 	priv->vf_hw.num_tx_queues = priv->num_q_vectors;
 	priv->vf_hw.num_rx_queues = priv->num_q_vectors;
 
@@ -292,6 +301,7 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		unregister_netdev(netdev);
 
 	if (priv) {
+		onic_vf_rings_clear(priv);
 		onic_vf_q_irq_clear(priv);
 		onic_vf_qdma_clear(priv);
 		onic_vf_mbox_irq_clear(priv);

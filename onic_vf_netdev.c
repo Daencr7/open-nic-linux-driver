@@ -49,18 +49,28 @@ Sau đó mới nối datapath thật.
 // #include "qdma_access/qdma_register.h"
 // #include "onic.h"
 #include "onic_vf_netdev.h"
-
+#include "onic.h"
+#include "onic_vf_qdma.h"
 /**
  * Need to developemt
  * - open VF netdev
  */
 int onic_vf_open_netdev(struct net_device *netdev)
 {
-	netdev_info(netdev, "onic_vf_open called\n");
+    struct onic_private *priv = netdev_priv(netdev);
+    int err;
 
-	// netif_start_queue(netdev);
-	// netif_carrier_on(netdev);
-	return 0;
+    netdev_info(netdev, "onic_vf_open called\n");
+
+    err = onic_vf_rings_init(priv);
+    if (err) {
+        netdev_err(netdev, "Failed to allocate inactive rings: %d\n",
+                   err);
+        return err;
+    }
+
+    netif_carrier_off(netdev);
+    return 0;
 }
 /** 
  * Need to developemt
@@ -68,11 +78,15 @@ int onic_vf_open_netdev(struct net_device *netdev)
  */
 int onic_vf_stop_netdev(struct net_device *netdev)
 {
-	netdev_info(netdev, "onic_vf_stop called\n");
+    struct onic_private *priv = netdev_priv(netdev);
 
-	// netif_stop_queue(netdev);
-	// netif_carrier_off(netdev);
-	return 0;
+    netdev_info(netdev, "onic_vf_stop called\n");
+
+    netif_carrier_off(netdev);
+    netif_tx_stop_all_queues(netdev);
+    onic_vf_rings_clear(priv);
+
+    return 0;
 }
 
 /**
