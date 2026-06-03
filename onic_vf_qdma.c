@@ -453,7 +453,20 @@ static int onic_vf_rx_poll(struct napi_struct *napi, int budget)
         onic_vf_set_completion_tail(priv, q->qid,
                                     cmpl_ring->next_to_clean, 0);
 
-    return work;
+	    return work;
+}
+
+static bool onic_vf_rx_completion_pending(struct onic_rx_queue *q)
+{
+	struct qdma_c2h_cmpl_stat stat;
+
+	if (!q || !q->cmpl_ring.wb)
+		return false;
+
+	dma_rmb();
+	qdma_unpack_c2h_cmpl_stat(&stat, q->cmpl_ring.wb);
+
+	return q->cmpl_ring.next_to_clean != stat.pidx;
 }
 
 static size_t onic_vf_ring_bytes(u16 count, size_t desc_size,
@@ -736,6 +749,9 @@ static void onic_vf_rx_poll_work_fn(struct work_struct *work)
 		struct onic_rx_queue *q = READ_ONCE(priv->rx_queue[qid]);
 
 		if (!q || !test_bit(ONIC_VF_RX_NAPI_ENABLED, q->state))
+			continue;
+
+		if (!onic_vf_rx_completion_pending(q))
 			continue;
 
 		napi_schedule(&q->napi);
