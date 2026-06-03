@@ -291,8 +291,8 @@ void onic_vf_tx_clean(struct onic_private *priv, struct onic_tx_queue *q)
     dma_rmb();
     qdma_unpack_wb_stat(&wb, ring->wb);
 
-    while (ring->next_to_clean != wb.cidx && work < real_count) {
-        struct onic_tx_buffer *buf = &q->buffer[ring->next_to_clean];
+	while (ring->next_to_clean != wb.cidx && work < real_count) {
+		struct onic_tx_buffer *buf = &q->buffer[ring->next_to_clean];
 
         if (buf->type == ONIC_TX_SKB && buf->skb) {
             dma_unmap_single(&priv->pdev->dev, buf->dma_addr,
@@ -308,13 +308,18 @@ void onic_vf_tx_clean(struct onic_private *priv, struct onic_tx_queue *q)
         onic_vf_ring_increment_clean(ring);
         work++;
     }
-    if (work)
-        dev_info_ratelimited(&priv->pdev->dev,
-                            "VF TX cleaned: local_qid=%u count=%u cidx=%u\n",
-                            q->qid, work, wb.cidx);
-    if (ring->next_to_clean != wb.cidx)
-        dev_warn_ratelimited(&priv->pdev->dev,
-                             "Invalid VF TX writeback: qid=%u cidx=%u\n",
+	if (work)
+		dev_info_ratelimited(&priv->pdev->dev,
+		                    "VF TX cleaned: local_qid=%u count=%u cidx=%u\n",
+		                    q->qid, work, wb.cidx);
+	else if (ring->next_to_use != ring->next_to_clean)
+		dev_info_ratelimited(&priv->pdev->dev,
+				    "VF TX pending: local_qid=%u pidx=%u sw_cidx=%u wb_cidx=%u\n",
+				    q->qid, ring->next_to_use,
+				    ring->next_to_clean, wb.cidx);
+	if (ring->next_to_clean != wb.cidx)
+		dev_warn_ratelimited(&priv->pdev->dev,
+		                     "Invalid VF TX writeback: qid=%u cidx=%u\n",
                              q->qid, wb.cidx);
 
     clear_bit(0, q->state);
