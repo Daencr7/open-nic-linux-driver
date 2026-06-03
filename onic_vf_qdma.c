@@ -24,6 +24,8 @@
 #include <linux/version.h>
 #include <linux/err.h>
 #include <linux/percpu.h>
+#include <linux/workqueue.h>
+#include <linux/jiffies.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include <net/page_pool/helpers.h>
 #include <net/page_pool/types.h>
@@ -53,6 +55,7 @@
 #define ONIC_VF_RX_CTXT_CONFIGURED  31
 #define ONIC_VF_RX_DESC_STEP        256
 #define ONIC_VF_RX_NAPI_ENABLED     30
+#define ONIC_VF_RX_POLL_INTERVAL_MS 100
 
 int onic_vf_qdma_init(struct onic_private *priv)
 {
@@ -715,7 +718,47 @@ void onic_vf_rx_datapath_clear(struct onic_private *priv)
 
         dev_info(&priv->pdev->dev,
                  "VF RX datapath stopped: local_qid=%u\n", qid);
-    }
+	}
+}
+
+static void onic_vf_rx_poll_work_fn(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct onic_private *priv =
+		container_of(dwork, struct onic_private, vf_rx_poll_work);
+	struct net_device *netdev = priv->netdev;
+	u16 qid;
+
+	if (!netdev || !netif_running(netdev))
+		return;
+
+	for (qid = 0; qid < priv->num_rx_queues; qid++) {
+		struct onic_rx_queue *q = READ_ONCE(priv->rx_queue[qid]);
+
+		if (!q || !test_bit(ONIC_VF_RX_NAPI_ENABLED, q->state))
+			continue;
+
+		napi_schedule(&q->napi);
+	}
+
+	schedule_delayed_work(&priv->vf_rx_poll_work,
+			      msecs_to_jiffies(ONIC_VF_RX_POLL_INTERVAL_MS));
+}
+
+void onic_vf_rx_poll_work_init(struct onic_private *priv)
+{
+	INIT_DELAYED_WORK(&priv->vf_rx_poll_work, onic_vf_rx_poll_work_fn);
+}
+
+void onic_vf_rx_poll_work_start(struct onic_private *priv)
+{
+	schedule_delayed_work(&priv->vf_rx_poll_work,
+			      msecs_to_jiffies(ONIC_VF_RX_POLL_INTERVAL_MS));
+}
+
+void onic_vf_rx_poll_work_stop(struct onic_private *priv)
+{
+	cancel_delayed_work_sync(&priv->vf_rx_poll_work);
 }
 
 int onic_vf_rx_datapath_init(struct onic_private *priv)

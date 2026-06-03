@@ -1,6 +1,7 @@
 #ifndef __ONIC_MBOX_H__
 #define __ONIC_MBOX_H__
 					
+#include <linux/if_ether.h>
 #include <linux/types.h>
 
 #define ONIC_MBOX_MSG_SIZE             128
@@ -30,6 +31,8 @@ struct onic_mbox_queue_res {
 	u32 func_id;
 	u32 qbase;
 	u32 qmax;
+	u8 mac[ETH_ALEN];
+	u8 reserved[2];
 };
 
 struct onic_mbox_queue_cfg {

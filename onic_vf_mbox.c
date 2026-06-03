@@ -332,14 +332,16 @@ validate_response:
 		err = -ERANGE;
 		goto out_unlock;
 	}
-	vf_hw->func_id = resp->data.qres.func_id;
-	vf_hw->qbase = resp->data.qres.qbase;
-	vf_hw->qmax = resp->data.qres.qmax;
-	vf_hw->resource_valid = true;
+		vf_hw->func_id = resp->data.qres.func_id;
+		vf_hw->qbase = resp->data.qres.qbase;
+		vf_hw->qmax = resp->data.qres.qmax;
+		memcpy(vf_hw->mac, resp->data.qres.mac, ETH_ALEN);
+		vf_hw->resource_valid = true;
 
-	dev_info(&priv->pdev->dev,
-		 "VF queue resource: func_id=%u qbase=%u qmax=%u\n",
-		 vf_hw->func_id, vf_hw->qbase, vf_hw->qmax);
+		dev_info(&priv->pdev->dev,
+			 "VF queue resource: func_id=%u qbase=%u qmax=%u mac=%pM\n",
+			 vf_hw->func_id, vf_hw->qbase, vf_hw->qmax,
+			 vf_hw->mac);
 
 out_unlock:
 	mutex_unlock(&vf_hw->mbox_lock);

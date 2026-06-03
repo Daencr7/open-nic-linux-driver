@@ -152,6 +152,9 @@ struct onic_private {
 	struct net_device *netdev;
 	struct bpf_prog *xdp_prog;
 	struct rtnl_link_stats64 *netdev_stats;
+	struct delayed_work vf_tx_clean_work;
+	struct delayed_work vf_rx_poll_work;
+
 	spinlock_t tx_lock;
 	spinlock_t rx_lock;
 

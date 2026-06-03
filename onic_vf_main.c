@@ -87,9 +87,9 @@ static const struct net_device_ops onic_vf_netdev_ops = {
 	.ndo_open = onic_vf_open_netdev,
 	.ndo_stop = onic_vf_stop_netdev,
 	.ndo_start_xmit = onic_vf_xmit_frame,
-	// .ndo_set_mac_address = onic_set_mac_address,
+	.ndo_set_mac_address = onic_vf_set_mac_address,
 	// .ndo_do_ioctl = onic_do_ioctl,
-	// .ndo_change_mtu = onic_change_mtu,
+	.ndo_change_mtu = onic_vf_change_mtu,
 	.ndo_get_stats64 = onic_vf_get_stats64,
 	// .ndo_bpf = onic_xdp,
 };
@@ -151,6 +151,8 @@ static int onic_vf_probe(struct pci_dev *pdev,
 
 	priv->pdev = pdev;
 	priv->netdev = netdev;
+	onic_vf_tx_clean_work_init(priv);
+	onic_vf_rx_poll_work_init(priv);
 
 	priv->netdev_stats = alloc_percpu(struct rtnl_link_stats64);
 	if (!priv->netdev_stats) {
@@ -243,13 +245,13 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	 * - init mailbox
 	 * - request qbase/qmax từ PF
 	 * - init TX/RX queue
-	 */
+	*/
 
 	netdev->netdev_ops = &onic_vf_netdev_ops;
-	// Create a ramdom MAC address for VF netdev
-	// Need to fix when using mailbox to get MAC from PF
-	eth_hw_addr_random(netdev); 
-
+	if (is_valid_ether_addr(priv->vf_hw.mac))
+		eth_hw_addr_set(netdev, priv->vf_hw.mac);
+	else
+		eth_hw_addr_random(netdev);
 
 	netdev->min_mtu = ETH_MIN_MTU;
 	netdev->max_mtu = ETH_DATA_LEN;
@@ -318,6 +320,8 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		unregister_netdev(netdev);
 
 	if (priv) {
+		onic_vf_rx_poll_work_stop(priv);
+		onic_vf_tx_clean_work_stop(priv);
 		onic_vf_rx_datapath_clear(priv);
 		
 		if (onic_vf_rx_contexts_clear(priv))

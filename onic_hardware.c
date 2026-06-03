@@ -242,8 +242,11 @@ int onic_init_hardware(struct onic_private *priv)
 
 	/* QDMA IP registers uses BAR-0 */
 	qdev = qdma_create_dev(pdev, 0);
-	if (!qdev)
-		return -ENOMEM;
+	if (!qdev) {
+		rv = -ENOMEM;
+		goto clear_hardware;
+	}
+	hw->qdma = (unsigned long)qdev;
 
 	func_id = PCI_FUNC(pdev->devfn);
 	qbase = func_id * ONIC_MAX_QUEUES;
@@ -276,8 +279,6 @@ int onic_init_hardware(struct onic_private *priv)
 	if (master_pf)
 		onic_qdma_init_csr(qdev);
 
-    hw->qdma = (unsigned long)qdev;
-
 	/* get the number of CMAC instances */
 	for (i = 0; i < ONIC_MAX_CMACS; ++i) {
 		val = onic_read_reg(hw, CMAC_OFFSET_CORE_VERSION(i));
@@ -303,13 +304,16 @@ void onic_clear_hardware(struct onic_private *priv)
 	struct qdma_dev *qdev = (struct qdma_dev *)hw->qdma;
 	u16 func_id = PCI_FUNC(pdev->devfn);
 
-	/* clear the function map in shell */
-	onic_write_reg(hw, QDMA_FUNC_OFFSET_QCONF(func_id), 0);
+	if (hw->addr)
+		onic_write_reg(hw, QDMA_FUNC_OFFSET_QCONF(func_id), 0);
 
-	qdma_invalidate_fmap_ctxt(qdev);
-	qdma_destroy_dev(qdev);
+	if (qdev) {
+		qdma_invalidate_fmap_ctxt(qdev);
+		qdma_destroy_dev(qdev);
+	}
 
-	pci_iounmap(pdev, hw->addr);
+	if (hw->addr)
+		pci_iounmap(pdev, hw->addr);
 
 	memset(hw, 0, sizeof(struct onic_hardware));
 }

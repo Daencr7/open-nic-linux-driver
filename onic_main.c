@@ -24,6 +24,7 @@
 #include <linux/netdevice.h>
 #include <linux/moduleparam.h>
 #include <linux/bpf.h>
+#include <linux/percpu.h>
 
 #include "onic.h"
 #include "onic_hardware.h"
@@ -246,7 +247,7 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	rv = onic_init_capacity(priv);
 	if (rv < 0) {
 		dev_err(&pdev->dev, "onic_init_capacity, err = %d", rv);
-		goto free_netdev;
+		goto free_stats;
 	}
 
 	rv = onic_init_hardware(priv);
@@ -296,6 +297,11 @@ clear_hardware:
 	onic_clear_hardware(priv);
 clear_capacity:
 	onic_clear_capacity(priv);
+free_stats:
+	if (priv->netdev_stats) {
+		free_percpu(priv->netdev_stats);
+		priv->netdev_stats = NULL;
+	}
 free_netdev:
 	free_netdev(priv->netdev);
 release_pci_mem:
@@ -317,17 +323,29 @@ static void onic_remove(struct pci_dev *pdev)
         static int xmc_remove=0;
 #endif
 
+	if (!priv)
+		goto release_device;
+
 	unregister_netdev(priv->netdev);
+
+	if (pci_num_vf(pdev)) {
+		pci_disable_sriov(pdev);
+		onic_free_vf_resources(priv, priv->num_vfs);
+	}
 
 	onic_clear_interrupt(priv);
 	onic_clear_hardware(priv);
 	onic_clear_capacity(priv);
 
+	if (priv->netdev_stats) {
+		free_percpu(priv->netdev_stats);
+		priv->netdev_stats = NULL;
+	}
 
 	free_netdev(priv->netdev);
 	pci_set_drvdata(pdev, NULL);
 
-
+release_device:
 	pci_release_mem_regions(pdev);
 	pci_disable_device(pdev);
 

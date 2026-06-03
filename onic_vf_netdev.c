@@ -44,15 +44,16 @@ Sau đó mới nối datapath thật.
 #include <net/page_pool.h>
 #endif
 
-// #include "onic_netdev.h"
-// #include "onic_hardware.h"
-// #include "qdma_access/qdma_register.h"
-// #include "onic.h"
+
+#include <linux/workqueue.h>
 #include <linux/dma-mapping.h>
 #include "qdma_export.h"
 #include "onic_vf_netdev.h"
 #include "onic.h"
 #include "onic_vf_qdma.h"
+
+
+#define ONIC_VF_TX_CLEAN_INTERVAL_MS 100
 /**
  * Need to developemt
  * - open VF netdev
@@ -97,10 +98,12 @@ int onic_vf_open_netdev(struct net_device *netdev)
         return err;
     }
 
-    netif_tx_start_all_queues(netdev);
-    netif_carrier_on(netdev);
+	netif_tx_start_all_queues(netdev);
+	netif_carrier_on(netdev);
+	onic_vf_tx_clean_work_start(priv);
+	onic_vf_rx_poll_work_start(priv);
 
-    return 0;
+	return 0;
 }
 /** 
  * Need to developemt
@@ -112,10 +115,12 @@ int onic_vf_stop_netdev(struct net_device *netdev)
     int err;
     netdev_info(netdev, "onic_vf_stop called\n");
 
-    netif_carrier_off(netdev);
-    
-    netif_tx_stop_all_queues(netdev);
-    onic_vf_rx_datapath_clear(priv);
+	netif_carrier_off(netdev);
+
+	netif_tx_stop_all_queues(netdev);
+	onic_vf_rx_poll_work_stop(priv);
+	onic_vf_tx_clean_work_stop(priv);
+	onic_vf_rx_datapath_clear(priv);
     err = onic_vf_rx_contexts_clear(priv);
     if (err) {
         netdev_err(netdev,
@@ -156,7 +161,31 @@ void onic_vf_get_stats64(struct net_device *netdev,
         stats->tx_bytes += pcpu->tx_bytes;
         stats->tx_errors += pcpu->tx_errors;
         stats->tx_dropped += pcpu->tx_dropped;
-    }
+	}
+}
+
+int onic_vf_set_mac_address(struct net_device *netdev, void *addr)
+{
+	struct sockaddr *saddr = addr;
+
+	if (!is_valid_ether_addr(saddr->sa_data))
+		return -EADDRNOTAVAIL;
+
+	eth_hw_addr_set(netdev, saddr->sa_data);
+	netdev_info(netdev, "Set VF MAC address to %pM\n", netdev->dev_addr);
+
+	return 0;
+}
+
+int onic_vf_change_mtu(struct net_device *netdev, int mtu)
+{
+	if (mtu < netdev->min_mtu || mtu > netdev->max_mtu)
+		return -EINVAL;
+
+	netdev->mtu = mtu;
+	netdev_info(netdev, "Set VF MTU to %d\n", mtu);
+
+	return 0;
 }
 
 static u16 onic_vf_tx_ring_real_count(const struct onic_ring *ring)
@@ -181,6 +210,62 @@ static void onic_vf_tx_ring_increment_head(struct onic_ring *ring)
     if (ring->next_to_use == onic_vf_tx_ring_real_count(ring))
         ring->next_to_use = 0;
 }
+
+static void onic_vf_tx_maybe_wake_subqueue(struct net_device *netdev,
+                                           u16 qid,
+                                           struct onic_tx_queue *q)
+{
+    struct netdev_queue *txq;
+
+    if (!q)
+        return;
+
+    txq = netdev_get_tx_queue(netdev, qid);
+    if (netif_tx_queue_stopped(txq) && !onic_vf_tx_ring_full(&q->ring))
+        netif_wake_subqueue(netdev, qid);
+}
+
+static void onic_vf_tx_clean_work_fn(struct work_struct *work)
+{
+    struct delayed_work *dwork = to_delayed_work(work);
+    struct onic_private *priv =
+        container_of(dwork, struct onic_private, vf_tx_clean_work);
+    struct net_device *netdev = priv->netdev;
+    u16 qid;
+
+    if (!netdev || !netif_running(netdev))
+        return;
+
+    for (qid = 0; qid < priv->num_tx_queues; qid++) {
+        struct onic_tx_queue *q = READ_ONCE(priv->tx_queue[qid]);
+
+        if (!q)
+            continue;
+
+        onic_vf_tx_clean(priv, q);
+        onic_vf_tx_maybe_wake_subqueue(netdev, qid, q);
+    }
+
+    schedule_delayed_work(&priv->vf_tx_clean_work,
+                          msecs_to_jiffies(ONIC_VF_TX_CLEAN_INTERVAL_MS));
+}
+
+void onic_vf_tx_clean_work_init(struct onic_private *priv)
+{
+    INIT_DELAYED_WORK(&priv->vf_tx_clean_work, onic_vf_tx_clean_work_fn);
+}
+
+void onic_vf_tx_clean_work_start(struct onic_private *priv)
+{
+    schedule_delayed_work(&priv->vf_tx_clean_work,
+                          msecs_to_jiffies(ONIC_VF_TX_CLEAN_INTERVAL_MS));
+}
+
+void onic_vf_tx_clean_work_stop(struct onic_private *priv)
+{
+    cancel_delayed_work_sync(&priv->vf_tx_clean_work);
+}
+
 /**
  * Need to developemt
  * - transmit packet
@@ -217,8 +302,15 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
     ring = &q->ring;
     onic_vf_tx_clean(priv, q);
 
-    if (unlikely(onic_vf_tx_ring_full(ring)))
-        return NETDEV_TX_BUSY;
+	if (unlikely(onic_vf_tx_ring_full(ring))) {
+		netif_stop_subqueue(netdev, qid);
+		onic_vf_tx_clean(priv, q);
+
+		if (onic_vf_tx_ring_full(ring))
+			return NETDEV_TX_BUSY;
+
+		netif_wake_subqueue(netdev, qid);
+	}
 
     if (unlikely(skb_put_padto(skb, ETH_ZLEN))) {
         stats->tx_dropped++;
@@ -252,10 +344,13 @@ netdev_tx_t onic_vf_xmit_frame(struct sk_buff *skb,
 
     onic_vf_tx_ring_increment_head(ring);
 
-    dma_wmb();
-    onic_vf_set_tx_head(priv, qid, ring->next_to_use);
+	dma_wmb();
+	onic_vf_set_tx_head(priv, qid, ring->next_to_use);
 
-    dev_info_ratelimited(&priv->pdev->dev,
+	if (onic_vf_tx_ring_full(ring))
+		netif_stop_subqueue(netdev, qid);
+
+	dev_info_ratelimited(&priv->pdev->dev,
                         "VF TX submitted: local_qid=%u pidx=%u len=%u\n",
                         qid, ring->next_to_use, desc.len);
 

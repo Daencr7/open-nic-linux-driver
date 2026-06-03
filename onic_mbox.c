@@ -72,6 +72,7 @@ onic_pf_mbox_make_queue_res_resp(struct onic_private *priv, u16 src_func_id,
 	resp->data.qres.func_id = res->func_id;
 	resp->data.qres.qbase = res->qbase;
 	resp->data.qres.qmax = res->qmax;
+	memcpy(resp->data.qres.mac, res->mac, ETH_ALEN);
 
 	return 0;
 }
