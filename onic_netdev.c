@@ -82,15 +82,11 @@ static void onic_tx_clean(struct onic_tx_queue *q)
 			u32 db = qdma_read_reg(qdev,
 					       QDMA_OFFSET_DMAP_SEL_H2C_DESC_PIDX +
 					       q->qid * 16);
-			u32 h2c_err = qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT);
-			u32 h2c_first = qdma_read_reg(qdev,
-						      QDMA_OFFSET_H2C_FIRST_ERR_QID);
 
 			dev_info_ratelimited(&priv->pdev->dev,
-					     "PF TX pending: qid=%u pidx=%u sw_cidx=%u wb_cidx=%u db=0x%08x h2c_err=0x%08x h2c_first=0x%08x\n",
+					     "PF TX pending: qid=%u pidx=%u sw_cidx=%u wb_cidx=%u db=0x%08x\n",
 					     q->qid, ring->next_to_use,
-					     ring->next_to_clean, wb.cidx,
-					     db, h2c_err, h2c_first);
+					     ring->next_to_clean, wb.cidx, db);
 		}
 		clear_bit(0, q->state);
 		return;
