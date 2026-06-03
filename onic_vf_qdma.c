@@ -312,11 +312,20 @@ void onic_vf_tx_clean(struct onic_private *priv, struct onic_tx_queue *q)
 		dev_info_ratelimited(&priv->pdev->dev,
 		                    "VF TX cleaned: local_qid=%u count=%u cidx=%u\n",
 		                    q->qid, work, wb.cidx);
-	else if (ring->next_to_use != ring->next_to_clean)
+	else if (ring->next_to_use != ring->next_to_clean) {
+		u32 db = onic_vf_read_bar0(priv,
+					   QDMA_OFFSET_VF_DMAP_SEL_H2C_DESC_PIDX +
+					   q->qid * 16);
+		u32 h2c_err = onic_vf_read_bar0(priv, QDMA_OFFSET_H2C_ERR_STAT);
+		u32 h2c_first = onic_vf_read_bar0(priv,
+						  QDMA_OFFSET_H2C_FIRST_ERR_QID);
+
 		dev_info_ratelimited(&priv->pdev->dev,
-				    "VF TX pending: local_qid=%u pidx=%u sw_cidx=%u wb_cidx=%u\n",
+				    "VF TX pending: local_qid=%u pidx=%u sw_cidx=%u wb_cidx=%u db=0x%08x h2c_err=0x%08x h2c_first=0x%08x\n",
 				    q->qid, ring->next_to_use,
-				    ring->next_to_clean, wb.cidx);
+				    ring->next_to_clean, wb.cidx,
+				    db, h2c_err, h2c_first);
+	}
 	if (ring->next_to_clean != wb.cidx)
 		dev_warn_ratelimited(&priv->pdev->dev,
 		                     "Invalid VF TX writeback: qid=%u cidx=%u\n",
