@@ -77,6 +77,21 @@ static void onic_tx_clean(struct onic_tx_queue *q)
 	qdma_unpack_wb_stat(&wb, ring->wb);
 
 	if (wb.cidx == ring->next_to_clean) {
+		if (ring->next_to_use != ring->next_to_clean) {
+			struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
+			u32 db = qdma_read_reg(qdev,
+					       QDMA_OFFSET_DMAP_SEL_H2C_DESC_PIDX +
+					       q->qid * 16);
+			u32 h2c_err = qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT);
+			u32 h2c_first = qdma_read_reg(qdev,
+						      QDMA_OFFSET_H2C_FIRST_ERR_QID);
+
+			dev_info_ratelimited(&priv->pdev->dev,
+					     "PF TX pending: qid=%u pidx=%u sw_cidx=%u wb_cidx=%u db=0x%08x h2c_err=0x%08x h2c_first=0x%08x\n",
+					     q->qid, ring->next_to_use,
+					     ring->next_to_clean, wb.cidx,
+					     db, h2c_err, h2c_first);
+		}
 		clear_bit(0, q->state);
 		return;
 	}
@@ -111,6 +126,10 @@ static void onic_tx_clean(struct onic_tx_queue *q)
 
 		onic_ring_increment_tail(ring);
 	}
+
+	dev_info_ratelimited(&priv->pdev->dev,
+			     "PF TX cleaned: qid=%u count=%d cidx=%u\n",
+			     q->qid, work, wb.cidx);
 
 	clear_bit(0, q->state);
 }
@@ -1237,4 +1256,3 @@ int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames, u32 
 
 	return n - drops;
 }
-
