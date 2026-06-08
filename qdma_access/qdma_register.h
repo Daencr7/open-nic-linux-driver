@@ -445,6 +445,7 @@ static inline void qdma_write_reg(struct qdma_dev *qdev, u32 offset, u32 val)
 #define QDMA_PF_MBOX_INTR_VEC           0x22408
 #define QDMA_PF_MBOX_TARGET_FN          0x2240C
 #define QDMA_PF_MBOX_INTR_CTRL          0x22410
+#define QDMA_PF_MBOX_RTL_VERSION        0x22414
 #define QDMA_PF_MBOX_ACK_BASE           0x22420
 #define QDMA_PF_MBOX_ACK_REGS           8
 #define QDMA_PF_MBOX_ACK(i)             (QDMA_PF_MBOX_ACK_BASE + ((i) * 4))
@@ -457,6 +458,7 @@ static inline void qdma_write_reg(struct qdma_dev *qdev, u32 offset, u32 val)
 #define QDMA_VF_MBOX_INTR_VEC           0x5008
 #define QDMA_VF_MBOX_TARGET_FN          0x500C
 #define QDMA_VF_MBOX_INTR_CTRL          0x5010
+#define QDMA_VF_MBOX_RTL_VERSION        0x5014
 #define QDMA_VF_MBOX_IN_MSG             0x5800
 #define QDMA_VF_MBOX_OUT_MSG            0x5C00
 

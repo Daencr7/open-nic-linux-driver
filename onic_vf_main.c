@@ -149,14 +149,23 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	 BAR0: QDMA/VF register /MSI-X/mailbox region
 	 BAR2: shell register region (if have)
 	*/
+	/* map BARs */
 	err = onic_vf_map_bars(priv);
 	if (err) {
 		dev_err(&pdev->dev, "Failed to map VF BARs: %d\n", err);
 		goto err_free_netdev;
 	}
+	/* allocate MSI-X vectors
+	 * - 1 for mailbox interrupt
+	 * - rest for queue interrupts (if have)
+	 */
+	// vectors = pci_alloc_irq_vectors(pdev,
+	// 			ONIC_VF_NON_Q_VECTORS,
+	// 			ONIC_MAX_QUEUES + ONIC_VF_NON_Q_VECTORS,
+	// 			PCI_IRQ_MSIX);
 	vectors = pci_alloc_irq_vectors(pdev,
 				ONIC_VF_NON_Q_VECTORS,
-				ONIC_MAX_QUEUES + ONIC_VF_NON_Q_VECTORS,
+				ONIC_VF_NON_Q_VECTORS,
 				PCI_IRQ_MSIX);
 	if (vectors < 0) {
 		dev_err(&pdev->dev,
@@ -164,10 +173,15 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		err = vectors;
 		goto err_unmap_bars;
 	}
-
-	priv->num_q_vectors = vectors - ONIC_VF_NON_Q_VECTORS;
-
-	err = onic_vf_mbox_irq_init(priv, priv->num_q_vectors);
+	dev_info(&pdev->dev,
+		"VF MSI-X allocated: total=%d non_q=%u q_vectors=%u\n",
+		vectors, ONIC_VF_NON_Q_VECTORS,
+		vectors - ONIC_VF_NON_Q_VECTORS);
+	// priv->num_q_vectors = vectors - ONIC_VF_NON_Q_VECTORS;
+	priv->num_q_vectors = 0; // Tạm thời chưa triển khai queue interrupt cho VF, sẽ thêm sau khi init datapath thật
+	
+	// err = onic_vf_mbox_irq_init(priv, priv->num_q_vectors);
+	err = onic_vf_mbox_irq_init(priv, 0);
 	if (err)
 		goto err_free_irq_vectors;
 
@@ -176,7 +190,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		dev_err(&pdev->dev,
 			"Failed to get VF queue resource: %d\n", err);
 		goto err_clear_mbox_irq;
-	}
+	} 
 	err = onic_vf_qdma_init(priv);
 	if (err) {
 		dev_err(&pdev->dev, "Failed to initialize VF QDMA state: %d\n", err);
@@ -191,11 +205,14 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	 */
 
 	netdev->netdev_ops = &onic_vf_netdev_ops;
-	// Create a ramdom MAC address for VF netdev
-	// Need to fix when using mailbox to get MAC from PF
+
+	/* Create a ramdom MAC address for VF netdev
+	 * Need to fix when using mailbox to get MAC from PF
+	 */
 	eth_hw_addr_random(netdev); 
 
 
+	/* set MTU */
 	netdev->min_mtu = ETH_MIN_MTU;
 	netdev->max_mtu = 9000;
 

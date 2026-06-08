@@ -47,10 +47,15 @@ int onic_vf_mbox_process_one(struct onic_private *priv)
 		return 0;
 
 	onic_vf_mbox_read_msg(priv, QDMA_VF_MBOX_IN_MSG, resp);
-
+	dev_info(&priv->pdev->dev,
+		"VF mbox response: opcode=%u status=%u seq=%u len=%u\n",
+		resp->hdr.opcode, resp->hdr.status,
+		resp->hdr.seq, resp->hdr.len);
 	/* Tell PF that VF consumed its response. */
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD, QDMA_MBOX_CMD_RCV);
-
+	dev_info(&priv->pdev->dev,
+		"VF mbox response acked: sts=0x%08x\n",
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
 	complete(&priv->vf_hw.mbox_done);
 
 	return 1;
@@ -59,7 +64,10 @@ int onic_vf_mbox_process_one(struct onic_private *priv)
 static irqreturn_t onic_vf_mbox_irq_handler(int irq, void *data)
 {
 	struct onic_private *priv = data;
-
+	dev_info(&priv->pdev->dev,
+		"VF mbox IRQ top: sts=0x%08x ctrl=0x%08x\n",
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_CTRL, 0);
 
 	return IRQ_WAKE_THREAD;
@@ -70,7 +78,15 @@ static irqreturn_t onic_vf_mbox_irq_thread(int irq, void *data)
 	struct onic_private *priv = data;
 	int err;
 
+	dev_info(&priv->pdev->dev,
+		"VF mbox IRQ thread start: sts=0x%08x\n",
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
+
 	err = onic_vf_mbox_process_one(priv);
+
+	dev_info(&priv->pdev->dev,
+		"VF mbox IRQ thread processed: err=%d sts=0x%08x\n",
+		err, onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
 
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_CTRL,
 			   QDMA_MBOX_INTR_CTRL_EN);
@@ -100,6 +116,9 @@ int onic_vf_mbox_irq_init(struct onic_private *priv, u16 vector)
 			"Failed to request VF mailbox IRQ: %d\n", err);
 		return err;
 	}
+	dev_info(&pdev->dev,
+	 "VF mbox IRQ requested: vector_index=%u linux_irq=%d\n",
+	 vector, pci_irq_vector(pdev, vector));
 
 	vf_hw->mbox_vector = vector;
 	vf_hw->mbox_irq_allocated = true;
@@ -108,6 +127,11 @@ int onic_vf_mbox_irq_init(struct onic_private *priv, u16 vector)
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_CTRL,
 			   QDMA_MBOX_INTR_CTRL_EN);
 
+	dev_info(&pdev->dev,
+		"VF mbox IRQ enabled: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 	return 0;
 }
 
@@ -175,9 +199,19 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 	req.hdr.opcode = ONIC_MBOX_OP_GET_QUEUE_RES;
 	req.hdr.seq = ++vf_hw->mbox_seq;
 	req.hdr.len = 0;
+	dev_info(&priv->pdev->dev,
+		"VF mbox send prepare: opcode=%u seq=%u sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+		req.hdr.opcode, req.hdr.seq,
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 
 	onic_vf_mbox_write_msg(priv, QDMA_VF_MBOX_OUT_MSG, &req);
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD, QDMA_MBOX_CMD_SEND);
+
+	dev_info(&priv->pdev->dev,
+	 "VF mbox SEND posted: sts=0x%08x\n",
+	 onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
 
 	timeout = wait_for_completion_timeout(&vf_hw->mbox_done,
 					      msecs_to_jiffies(1000));
@@ -195,22 +229,22 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 			onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
 			onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 
-		/*
-		* Bring-up fallback: inspect a response that reached VF inbox
-		* even if VF mailbox MSI-X routing did not fire.
-		*/
-		if (status & QDMA_MBOX_STS_I_MSG_MASK) {
-			err = onic_vf_mbox_process_one(priv);
-			if (err > 0) {
-				err = 0;
-				goto validate_response;
-			}
-		}
+	// 	/*
+	// 	* Bring-up fallback: inspect a response that reached VF inbox
+	// 	* even if VF mailbox MSI-X routing did not fire.
+	// 	*/
+	// 	if (status & QDMA_MBOX_STS_I_MSG_MASK) {
+	// 		err = onic_vf_mbox_process_one(priv);
+	// 		if (err > 0) {
+	// 			err = 0;
+	// 			goto validate_response;
+	// 		}
+	// 	}
 
 		err = -ETIMEDOUT;
 		goto out_unlock;
 	}
-validate_response:
+// validate_response:
 	if (resp->hdr.opcode != ONIC_MBOX_OP_QUEUE_RES_RESP ||
 	    resp->hdr.seq != req.hdr.seq ||
 	    resp->hdr.status != ONIC_MBOX_STS_OK ||

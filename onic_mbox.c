@@ -109,6 +109,11 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 
 	onic_pf_mbox_read_msg(qdev, QDMA_PF_MBOX_IN_MSG, &req);
 
+	dev_info(&priv->pdev->dev,
+		"PF mbox request: src_func=%u opcode=%u status=%u seq=%u len=%u\n",
+		src_func_id, req.hdr.opcode, req.hdr.status,
+		req.hdr.seq, req.hdr.len);
+
 	memset(&resp, 0, sizeof(resp));
 	resp.hdr.opcode = ONIC_MBOX_OP_QUEUE_RES_RESP;
 	resp.hdr.status = ONIC_MBOX_STS_ERR;
@@ -133,9 +138,15 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 	/* Release the VF request after its contents have been copied. */
 	qdma_write_reg(qdev, QDMA_PF_MBOX_CMD, QDMA_MBOX_CMD_RCV);
 
+
+
 	onic_pf_mbox_write_msg(qdev, QDMA_PF_MBOX_OUT_MSG, &resp);
 	qdma_write_reg(qdev, QDMA_PF_MBOX_CMD, QDMA_MBOX_CMD_SEND);
-
+	dev_info(&priv->pdev->dev,
+	 "PF mbox response sent: src_func=%u opcode=%u status=%u seq=%u len=%u sts=0x%08x\n",
+	 src_func_id, resp.hdr.opcode, resp.hdr.status,
+	 resp.hdr.seq, resp.hdr.len,
+	 qdma_read_reg(qdev, QDMA_PF_MBOX_STS));
 	if (err)
 		dev_warn(&priv->pdev->dev,
 			 "PF mbox rejected request: func_id=%u opcode=%u err=%d\n",
@@ -267,7 +278,12 @@ int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
 
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_VEC, vector);
 	onic_pf_mbox_irq_enable(priv);
-
+	dev_info(&priv->pdev->dev,
+		"PF mbox IRQ enabled: vector_index=%u linux_irq=%d sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+		vector, pci_irq_vector(priv->pdev, vector),
+		qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+		qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
+		qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 
 
 	return 0;
