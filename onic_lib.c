@@ -23,19 +23,6 @@
 
 extern int onic_poll(struct napi_struct *napi, int budget);
 
-static irqreturn_t onic_q_handler(int irq, void *dev_id)
-{
-	struct onic_q_vector *vec = dev_id;
-	struct onic_private *priv = vec->priv;
-	u16 qid = vec->vid;
-	struct onic_rx_queue *rxq = priv->rx_queue[qid];
-	bool debug = 0;
-	if (debug) dev_info(&priv->pdev->dev, "queue irq");
-
-	//napi_schedule(&rxq->napi);
-	napi_schedule_irqoff(&rxq->napi);
-	return IRQ_HANDLED;
-}
 
 // static irqreturn_t onic_user_handler(int irq, void *dev_id)
 // {
@@ -74,7 +61,7 @@ static irqreturn_t onic_user_thread_fn(int irq, void *dev_id)
 	if (!test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
 		return IRQ_HANDLED;
 
-		
+
 
 	dev_info(&priv->pdev->dev,
 		"PF user/mbox IRQ thread start: sts=0x%08x\n",
@@ -99,7 +86,35 @@ static irqreturn_t onic_user_thread_fn(int irq, void *dev_id)
 
 static irqreturn_t onic_error_handler(int irq, void *dev_id)
 {
+	
 	return IRQ_WAKE_THREAD;
+}
+
+// by edna
+static irqreturn_t onic_q_handler(int irq, void *dev_id)
+{
+	struct onic_q_vector *vec = dev_id;
+	struct onic_private *priv;
+	struct onic_rx_queue *rxq;
+	u16 qid;
+
+	if (!vec)
+		return IRQ_HANDLED;
+
+	priv = vec->priv;
+	if (!priv)
+		return IRQ_HANDLED;
+
+	qid = vec->vid;
+	if (qid >= ONIC_MAX_QUEUES)
+		return IRQ_HANDLED;
+
+	rxq = READ_ONCE(priv->rx_queue[qid]);
+	if (!rxq)
+		return IRQ_HANDLED;
+
+	napi_schedule_irqoff(&rxq->napi);
+	return IRQ_HANDLED;
 }
 
 static irqreturn_t onic_error_thread_fn(int irq, void *dev_id)

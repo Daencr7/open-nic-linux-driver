@@ -266,7 +266,7 @@ void onic_pf_mbox_irq_enable(struct onic_private *priv)
 int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
 {
 	struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
-	int dropped;
+	int dropped, err;
 	if (!qdev || !qdev->addr)
 		return -ENODEV;
 
@@ -275,9 +275,17 @@ int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
 	dropped = onic_pf_mbox_drop_stale_requests(priv);
 	if (dropped < 0)
 		return dropped;
+	err = onic_pf_mbox_process_pending(priv);
+	if (err < 0)
+		return err;
+
+	if (err)
+		dev_info(&priv->pdev->dev,
+				"PF mbox drained %d stale event(s) before IRQ enable\n", err);
 
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_VEC, vector);
 	onic_pf_mbox_irq_enable(priv);
+
 	dev_info(&priv->pdev->dev,
 		"PF mbox IRQ enabled: vector_index=%u linux_irq=%d sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
 		vector, pci_irq_vector(priv->pdev, vector),
