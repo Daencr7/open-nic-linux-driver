@@ -242,6 +242,16 @@ int onic_pf_mbox_process_pending(struct onic_private *priv)
 	return processed;
 }
 
+// void onic_pf_mbox_irq_disable(struct onic_private *priv)
+// {
+// 	struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
+
+// 	if (!qdev || !qdev->addr)
+// 		return;
+
+// 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_CTRL, 0);
+// }
+
 void onic_pf_mbox_irq_disable(struct onic_private *priv)
 {
 	struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
@@ -249,8 +259,30 @@ void onic_pf_mbox_irq_disable(struct onic_private *priv)
 	if (!qdev || !qdev->addr)
 		return;
 
+	dev_info(&priv->pdev->dev,
+		 "PF mbox IRQ disable: caller=%pS sts=0x%08x ctrl_before=0x%08x\n",
+		 __builtin_return_address(0),
+		 qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+		 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_CTRL, 0);
+
+	dev_info(&priv->pdev->dev,
+		 "PF mbox IRQ disable done: ctrl_after=0x%08x\n",
+		 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 }
+
+// void onic_pf_mbox_irq_enable(struct onic_private *priv)
+// {
+// 	struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
+
+// 	if (!qdev || !qdev->addr)
+// 		return;
+// 	// Enable mailbox interrupt
+// 	// Ghi 1 vào bit0
+// 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_CTRL,
+// 		       QDMA_MBOX_INTR_CTRL_EN);
+// }
 
 void onic_pf_mbox_irq_enable(struct onic_private *priv)
 {
@@ -258,10 +290,19 @@ void onic_pf_mbox_irq_enable(struct onic_private *priv)
 
 	if (!qdev || !qdev->addr)
 		return;
-	// Enable mailbox interrupt
-	// Ghi 1 vào bit0
+
+	dev_info(&priv->pdev->dev,
+		 "PF mbox IRQ enable: caller=%pS sts=0x%08x ctrl_before=0x%08x\n",
+		 __builtin_return_address(0),
+		 qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+		 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_CTRL,
 		       QDMA_MBOX_INTR_CTRL_EN);
+
+	dev_info(&priv->pdev->dev,
+		 "PF mbox IRQ enable done: ctrl_after=0x%08x\n",
+		 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 }
 
 int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
