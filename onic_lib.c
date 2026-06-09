@@ -123,6 +123,18 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 	if (qid >= ONIC_MAX_QUEUES)
 		return IRQ_HANDLED;
 
+	if (qid == 0 && test_bit(ONIC_FLAG_MASTER_PF, priv->flags)) {
+		struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
+
+		if (qdev && qdev->addr) {
+			dev_info(&priv->pdev->dev,
+				"PF queue IRQ qid=0: mbox_sts=0x%08x mbox_vec=0x%08x mbox_ctrl=0x%08x\n",
+				qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+				qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
+				qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+		}
+	}
+	
 	rxq = READ_ONCE(priv->rx_queue[qid]);
 	if (!rxq)
 		return IRQ_HANDLED;
