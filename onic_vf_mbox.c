@@ -227,7 +227,7 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 	// Chờ response với timeout, xảy ra nếu VF nhận được interrupt response
 	// và thread gọi complete(&priv->vf_hw.mbox_done) trong onic_vf_mbox_irq_thread
 	timeout = wait_for_completion_timeout(&vf_hw->mbox_done,
-					      msecs_to_jiffies(10000));
+					      msecs_to_jiffies(60000));
 	// if (!timeout) {
 	// 	err = -ETIMEDOUT;
 	// 	goto out_unlock;

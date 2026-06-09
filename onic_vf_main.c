@@ -20,7 +20,7 @@
 #include "onic_vf_hw.h"
 #include "onic_vf_mbox.h"
 #include "onic_vf_qdma.h"
-
+#include "qdma_register.h"
 
 #define DRV_STR "OpenNIC Linux Kernel Driver (VF)"
 char onic_drv_name[] = "onic_vf";
@@ -29,6 +29,26 @@ const char onic_drv_str[] = DRV_STR;
 const char onic_drv_ver[] = DRV_VER;
 
 #define ONIC_VF_NON_Q_VECTORS 1
+
+static irqreturn_t onic_vf_debug_irq_handler(int irq, void *data)
+{
+	struct onic_private *priv = data;
+	int i;
+
+	for (i = 1; i < 8; i++) {
+		if (pci_irq_vector(priv->pdev, i) == irq)
+			break;
+	}
+
+	dev_err(&priv->pdev->dev,
+		"VF DEBUG IRQ hit: vector_index=%d linux_irq=%d mbox_sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+		i, irq,
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
+		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
+
+	return IRQ_HANDLED;
+}
 
 MODULE_AUTHOR("Edna");
 MODULE_DESCRIPTION(DRV_STR);
@@ -102,6 +122,7 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	int err;
 	int vectors;
 	// u32 build_ts;
+	int debug_irq_count = 0;
 
 	dev_info(&pdev->dev, "OpenNIC VF probe start\n");
 
@@ -163,9 +184,13 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	// 			ONIC_VF_NON_Q_VECTORS,
 	// 			ONIC_MAX_QUEUES + ONIC_VF_NON_Q_VECTORS,
 	// 			PCI_IRQ_MSIX);
+	// vectors = pci_alloc_irq_vectors(pdev,
+	// 			ONIC_VF_NON_Q_VECTORS,
+	// 			ONIC_VF_NON_Q_VECTORS + 7,
+	// 			PCI_IRQ_MSIX);
 	vectors = pci_alloc_irq_vectors(pdev,
-				ONIC_VF_NON_Q_VECTORS,
-				ONIC_VF_NON_Q_VECTORS,
+				8,
+				8,
 				PCI_IRQ_MSIX);
 	if (vectors < 0) {
 		dev_err(&pdev->dev,
@@ -184,18 +209,38 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	err = onic_vf_mbox_irq_init(priv, 0);
 	if (err)
 		goto err_free_irq_vectors;
-	
+
+	{
+	int i;
+
+	for (i = 1; i < vectors; i++) {
+		err = request_irq(pci_irq_vector(pdev, i),
+				  onic_vf_debug_irq_handler,
+				  0, "onic-vf-debug", priv);
+		if (err) {
+			dev_err(&pdev->dev,
+				"Failed to request VF debug IRQ vector=%d irq=%d err=%d\n",
+				i, pci_irq_vector(pdev, i), err);
+			goto err_clear_debug_irqs;
+		}
+
+		dev_info(&pdev->dev,
+			 "VF debug IRQ requested: vector_index=%d linux_irq=%d\n",
+			 i, pci_irq_vector(pdev, i));
+		debug_irq_count++;
+	}
+	}
 	//VF request mailbox resource from PF 
 	err = onic_vf_mbox_get_queue_resource(priv);
 	if (err) {
 		dev_err(&pdev->dev,
 			"Failed to get VF queue resource: %d\n", err);
-		goto err_clear_mbox_irq;
+		goto err_clear_debug_irqs;
 	} 
 	err = onic_vf_qdma_init(priv);
 	if (err) {
 		dev_err(&pdev->dev, "Failed to initialize VF QDMA state: %d\n", err);
-		goto err_clear_mbox_irq;
+		goto err_clear_vf_qdma;
 	}
 	/*
 	 * Tạm thời VF chưa init datapath thật.
@@ -238,7 +283,15 @@ static int onic_vf_probe(struct pci_dev *pdev,
 err_clear_vf_qdma:
 	onic_vf_qdma_clear(priv);
 
-err_clear_mbox_irq:
+err_clear_debug_irqs:
+{
+	int i;
+
+	for (i = 1; i <= debug_irq_count; i++)
+		free_irq(pci_irq_vector(pdev, i), priv);
+}
+
+// err_clear_mbox_irq:
 	onic_vf_mbox_irq_clear(priv);
 
 err_free_irq_vectors:
@@ -278,6 +331,12 @@ static void onic_vf_remove(struct pci_dev *pdev)
 		onic_vf_qdma_clear(priv);
 		onic_vf_mbox_irq_clear(priv);
 		priv->num_q_vectors = 0;
+		{
+			int i;
+
+			for (i = 1; i < 8; i++)
+				free_irq(pci_irq_vector(pdev, i), priv);
+		}
 		pci_free_irq_vectors(pdev);
 		onic_vf_unmap_bars(priv);
 	}
