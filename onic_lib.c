@@ -123,18 +123,35 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 	if (qid >= ONIC_MAX_QUEUES)
 		return IRQ_HANDLED;
 
-	if (qid == 0 && test_bit(ONIC_FLAG_MASTER_PF, priv->flags)) {
+	if (test_bit(ONIC_FLAG_MASTER_PF, priv->flags)) {
 		struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
+		u32 mbox_sts;
 
 		if (qdev && qdev->addr) {
-			dev_info(&priv->pdev->dev,
-				"PF queue IRQ qid=0: mbox_sts=0x%08x mbox_vec=0x%08x mbox_ctrl=0x%08x\n",
-				qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
-				qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
-				qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+			mbox_sts = qdma_read_reg(qdev, QDMA_PF_MBOX_STS);
+
+			if (mbox_sts & (QDMA_MBOX_STS_I_MSG_MASK |
+					QDMA_MBOX_STS_ACK_MASK)) {
+				int err;
+
+				dev_info(&priv->pdev->dev,
+					"PF queue IRQ qid=%u handles mailbox: irq=%d sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+					qid, irq, mbox_sts,
+					qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
+					qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+
+				onic_pf_mbox_irq_disable(priv);
+				err = onic_pf_mbox_process_pending(priv);
+				onic_pf_mbox_irq_enable(priv);
+
+				if (err < 0)
+					dev_err(&priv->pdev->dev,
+						"PF mailbox processing from qirq failed: %d\n",
+						err);
+			}
 		}
 	}
-	
+
 	rxq = READ_ONCE(priv->rx_queue[qid]);
 	if (!rxq)
 		return IRQ_HANDLED;

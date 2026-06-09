@@ -227,7 +227,7 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 	// Chờ response với timeout, xảy ra nếu VF nhận được interrupt response
 	// và thread gọi complete(&priv->vf_hw.mbox_done) trong onic_vf_mbox_irq_thread
 	timeout = wait_for_completion_timeout(&vf_hw->mbox_done,
-					      msecs_to_jiffies(1000));
+					      msecs_to_jiffies(10000));
 	// if (!timeout) {
 	// 	err = -ETIMEDOUT;
 	// 	goto out_unlock;
@@ -242,22 +242,22 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 			onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
 			onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 
-	// 	/*
-	// 	* Bring-up fallback: inspect a response that reached VF inbox
-	// 	* even if VF mailbox MSI-X routing did not fire.
-	// 	*/
-	// 	if (status & QDMA_MBOX_STS_I_MSG_MASK) {
-	// 		err = onic_vf_mbox_process_one(priv);
-	// 		if (err > 0) {
-	// 			err = 0;
-	// 			goto validate_response;
-	// 		}
-	// 	}
+		/*
+		* Bring-up fallback: inspect a response that reached VF inbox
+		* even if VF mailbox MSI-X routing did not fire.
+		*/
+		if (status & QDMA_MBOX_STS_I_MSG_MASK) {
+			err = onic_vf_mbox_process_one(priv);
+			if (err > 0) {
+				err = 0;
+				goto validate_response;
+			}
+		}
 
 		err = -ETIMEDOUT;
 		goto out_unlock;
 	}
-// validate_response:
+validate_response:
 	if (resp->hdr.opcode != ONIC_MBOX_OP_QUEUE_RES_RESP ||
 	    resp->hdr.seq != req.hdr.seq ||
 	    resp->hdr.status != ONIC_MBOX_STS_OK ||
