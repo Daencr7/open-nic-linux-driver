@@ -34,9 +34,23 @@ extern int onic_poll(struct napi_struct *napi, int budget);
 static irqreturn_t onic_user_handler(int irq, void *dev_id)
 {
 	struct onic_private *priv = dev_id;
+	struct qdma_dev *qdev;
 
-	if (test_bit(ONIC_FLAG_MASTER_PF, priv->flags))
+	if (!priv)
+		return IRQ_HANDLED;
+
+	if (test_bit(ONIC_FLAG_MASTER_PF, priv->flags)) {
+		qdev = (struct qdma_dev *)priv->hw.qdma;
+
+		if (qdev && qdev->addr) {
+			dev_info(&priv->pdev->dev,
+				 "PF user/mbox IRQ top: sts=0x%08x ctrl=0x%08x\n",
+				 qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+				 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+		}
+
 		onic_pf_mbox_irq_disable(priv);
+	}
 
 	return IRQ_WAKE_THREAD;
 }

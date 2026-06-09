@@ -41,21 +41,23 @@ int onic_vf_mbox_process_one(struct onic_private *priv)
 {
 	struct onic_mbox_msg *resp = &priv->vf_hw.mbox_resp;
 	u32 status;
-
+	// kiểm tra trạng thái response
 	status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
 	if (!(status & QDMA_MBOX_STS_I_MSG_MASK))
 		return 0;
-
+	// Đọc ở inbox
 	onic_vf_mbox_read_msg(priv, QDMA_VF_MBOX_IN_MSG, resp);
 	dev_info(&priv->pdev->dev,
 		"VF mbox response: opcode=%u status=%u seq=%u len=%u\n",
 		resp->hdr.opcode, resp->hdr.status,
 		resp->hdr.seq, resp->hdr.len);
 	/* Tell PF that VF consumed its response. */
+	// Sau khi ghi RCV thì Function status reg sẽ clear.
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD, QDMA_MBOX_CMD_RCV);
 	dev_info(&priv->pdev->dev,
 		"VF mbox response acked: sts=0x%08x\n",
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
+	// Đánh thức hàm đang chờ
 	complete(&priv->vf_hw.mbox_done);
 
 	return 1;
@@ -68,6 +70,7 @@ static irqreturn_t onic_vf_mbox_irq_handler(int irq, void *data)
 		"VF mbox IRQ top: sts=0x%08x ctrl=0x%08x\n",
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
+	// Tắt tạm thời interrupt mailbox
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_CTRL, 0);
 
 	return IRQ_WAKE_THREAD;
@@ -81,7 +84,7 @@ static irqreturn_t onic_vf_mbox_irq_thread(int irq, void *data)
 	dev_info(&priv->pdev->dev,
 		"VF mbox IRQ thread start: sts=0x%08x\n",
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
-
+	// Kiểm tra trạng thái funtion status reg
 	err = onic_vf_mbox_process_one(priv);
 
 	dev_info(&priv->pdev->dev,
@@ -107,6 +110,7 @@ int onic_vf_mbox_irq_init(struct onic_private *priv, u16 vector)
 	init_completion(&vf_hw->mbox_done);
 	mutex_init(&vf_hw->mbox_lock);
 	vf_hw->mbox_seq = get_random_u32();
+	// Đắng ký IRQ mailbox cho VF
 	err = request_threaded_irq(pci_irq_vector(pdev, vector),
 				   onic_vf_mbox_irq_handler,
 				   onic_vf_mbox_irq_thread,
@@ -122,8 +126,10 @@ int onic_vf_mbox_irq_init(struct onic_private *priv, u16 vector)
 
 	vf_hw->mbox_vector = vector;
 	vf_hw->mbox_irq_allocated = true;
-
+	// Ghi interrupt vector number dùng cho mailbox
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_VEC, vector);
+	// Enable mailbox interrupt
+	// Ghi 0x1 vào bit0
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_CTRL,
 			   QDMA_MBOX_INTR_CTRL_EN);
 
@@ -132,6 +138,7 @@ int onic_vf_mbox_irq_init(struct onic_private *priv, u16 vector)
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
+
 	return 0;
 }
 
@@ -186,7 +193,8 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 	err = onic_vf_mbox_drop_stale_responses(priv);
 	if (err < 0)
 		goto out_unlock;
-		
+	// Kiểm tra trạng thái kênh rảnh Function Status Register
+	// Đọc thanh ghi status ở bit 1
 	status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
 	if (status & QDMA_MBOX_STS_O_MSG_MASK) {
 		err = -EBUSY;
@@ -205,14 +213,19 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
 		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
-
+	// Ghi message vào mailbox outbox - Outgoing Message Memory
 	onic_vf_mbox_write_msg(priv, QDMA_VF_MBOX_OUT_MSG, &req);
+
+	//Ghi 1 vào msgsend kich hoạt gửi.
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD, QDMA_MBOX_CMD_SEND);
 
 	dev_info(&priv->pdev->dev,
 	 "VF mbox SEND posted: sts=0x%08x\n",
 	 onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
 
+
+	// Chờ response với timeout, xảy ra nếu VF nhận được interrupt response
+	// và thread gọi complete(&priv->vf_hw.mbox_done) trong onic_vf_mbox_irq_thread
 	timeout = wait_for_completion_timeout(&vf_hw->mbox_done,
 					      msecs_to_jiffies(1000));
 	// if (!timeout) {

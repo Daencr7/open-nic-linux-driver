@@ -258,7 +258,8 @@ void onic_pf_mbox_irq_enable(struct onic_private *priv)
 
 	if (!qdev || !qdev->addr)
 		return;
-
+	// Enable mailbox interrupt
+	// Ghi 1 vào bit0
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_CTRL,
 		       QDMA_MBOX_INTR_CTRL_EN);
 }
@@ -282,8 +283,9 @@ int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
 	if (err)
 		dev_info(&priv->pdev->dev,
 				"PF mbox drained %d stale event(s) before IRQ enable\n", err);
-
+	// Ghi interrupt vector number dùng cho mailbox
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_VEC, vector);
+	// Enable mailbox interrupt
 	onic_pf_mbox_irq_enable(priv);
 
 	dev_info(&priv->pdev->dev,

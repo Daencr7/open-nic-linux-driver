@@ -184,7 +184,8 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	err = onic_vf_mbox_irq_init(priv, 0);
 	if (err)
 		goto err_free_irq_vectors;
-
+	
+	//VF request mailbox resource from PF 
 	err = onic_vf_mbox_get_queue_resource(priv);
 	if (err) {
 		dev_err(&pdev->dev,
