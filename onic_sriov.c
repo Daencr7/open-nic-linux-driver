@@ -58,7 +58,7 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 {
 	struct qdma_dev *pf_qdev = (struct qdma_dev *)priv->hw.qdma;
 	int i, err;
-	int queues_per_vf = 4;
+	// int queues_per_vf = 4;
 	int current_base_queue;
 
 	if (!pf_qdev)
@@ -72,7 +72,7 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		u16 vf_func_id = 4 + i;
  
 		fmap_ctxt.qbase = current_base_queue;
-		fmap_ctxt.qmax  = queues_per_vf;
+		fmap_ctxt.qmax  = ONIC_VF_MAX_QUEUES;
 
 		vf_qdev.pdev = priv->pdev;
 		vf_qdev.addr = pf_qdev->addr;
@@ -88,9 +88,9 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		priv->vf_res[i].vf_id = i;
 		priv->vf_res[i].func_id = vf_func_id;
 		priv->vf_res[i].qbase = current_base_queue;
-		priv->vf_res[i].qmax = queues_per_vf;
-		priv->vf_res[i].num_tx_queues = queues_per_vf;
-		priv->vf_res[i].num_rx_queues = queues_per_vf;
+		priv->vf_res[i].qmax = ONIC_VF_MAX_QUEUES;
+		priv->vf_res[i].num_tx_queues = ONIC_VF_MAX_QUEUES;
+		priv->vf_res[i].num_rx_queues = ONIC_VF_MAX_QUEUES;
 		eth_random_addr(priv->vf_res[i].mac);
 		priv->vf_res[i].enabled = true;
 		dev_info(&priv->pdev->dev,
@@ -102,7 +102,7 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 				priv->vf_res[i].num_tx_queues,
 				priv->vf_res[i].num_rx_queues,
 				priv->vf_res[i].mac);
-		current_base_queue += queues_per_vf;
+		current_base_queue += ONIC_VF_MAX_QUEUES;
 		
 	}
 	priv->num_vfs = num_vfs;

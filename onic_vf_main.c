@@ -180,7 +180,8 @@ static int onic_vf_probe(struct pci_dev *pdev,
 
 	pci_set_master(pdev);
 
-	netdev = alloc_etherdev_mq(sizeof(struct onic_private), 1);
+	// alloc queue following queue per vf - qmax
+	netdev = alloc_etherdev_mq(sizeof(struct onic_private), ONIC_VF_MAX_QUEUES);
 	if (!netdev) {
 		err = -ENOMEM;
 		goto err_release_regions;
@@ -284,9 +285,26 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		goto err_clear_vf_qdma;
 	}
 
-	// netif_set_real_num_tx_queues(netdev, priv->num_tx_queues);
-	// netif_set_real_num_rx_queues(netdev, priv->num_rx_queues);
+	err = netif_set_real_num_tx_queues(netdev, priv->vf_hw.num_tx_queues);
+	if (err) {
+		dev_err(&pdev->dev,
+			"Failed to set VF real TX queues=%u err=%d\n",
+			priv->vf_hw.num_tx_queues, err);
+		goto err_clear_vf_qdma;
+	}
 
+	err = netif_set_real_num_rx_queues(netdev, priv->vf_hw.num_rx_queues);
+	if (err) {
+		dev_err(&pdev->dev,
+			"Failed to set VF real RX queues=%u err=%d\n",
+			priv->vf_hw.num_rx_queues, err);
+		goto err_clear_vf_qdma;
+	}
+	dev_info(&pdev->dev,
+	 "VF netdev queues: tx=%u rx=%u q_vectors=%u\n",
+	 priv->vf_hw.num_tx_queues,
+	 priv->vf_hw.num_rx_queues,
+	 priv->num_q_vectors);
 	/*
 	 * Tạm thời VF chưa init datapath thật.
 	 * Sau này sẽ thêm:

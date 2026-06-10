@@ -48,6 +48,8 @@
 
 /* NUM VF */
 #define ONIC_MAX_VFS 4
+/* Set queue per VF*/
+#define ONIC_VF_MAX_QUEUES 4
 
 enum onic_tx_buf_type {
 	ONIC_TX_SKB = BIT(0),
