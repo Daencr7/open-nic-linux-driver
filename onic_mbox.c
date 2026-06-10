@@ -142,11 +142,11 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 
 	onic_pf_mbox_write_msg(qdev, QDMA_PF_MBOX_OUT_MSG, &resp);
 	qdma_write_reg(qdev, QDMA_PF_MBOX_CMD, QDMA_MBOX_CMD_SEND);
-	dev_info(&priv->pdev->dev,
-	 "PF mbox response sent: src_func=%u opcode=%u status=%u seq=%u len=%u sts=0x%08x\n",
-	 src_func_id, resp.hdr.opcode, resp.hdr.status,
-	 resp.hdr.seq, resp.hdr.len,
-	 qdma_read_reg(qdev, QDMA_PF_MBOX_STS));
+	// dev_info(&priv->pdev->dev,
+	//  "PF mbox response sent: src_func=%u opcode=%u status=%u seq=%u len=%u sts=0x%08x\n",
+	//  src_func_id, resp.hdr.opcode, resp.hdr.status,
+	//  resp.hdr.seq, resp.hdr.len,
+	//  qdma_read_reg(qdev, QDMA_PF_MBOX_STS));
 	if (err)
 		dev_warn(&priv->pdev->dev,
 			 "PF mbox rejected request: func_id=%u opcode=%u err=%d\n",
@@ -259,17 +259,17 @@ void onic_pf_mbox_irq_disable(struct onic_private *priv)
 	if (!qdev || !qdev->addr)
 		return;
 
-	dev_info(&priv->pdev->dev,
-		 "PF mbox IRQ disable: caller=%pS sts=0x%08x ctrl_before=0x%08x\n",
-		 __builtin_return_address(0),
-		 qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
-		 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+	// dev_info(&priv->pdev->dev,
+	// 	 "PF mbox IRQ disable: caller=%pS sts=0x%08x ctrl_before=0x%08x\n",
+	// 	 __builtin_return_address(0),
+	// 	 qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+	// 	 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_CTRL, 0);
 
-	dev_info(&priv->pdev->dev,
-		 "PF mbox IRQ disable done: ctrl_after=0x%08x\n",
-		 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+	// dev_info(&priv->pdev->dev,
+	// 	 "PF mbox IRQ disable done: ctrl_after=0x%08x\n",
+	// 	 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 }
 
 // void onic_pf_mbox_irq_enable(struct onic_private *priv)
@@ -291,18 +291,18 @@ void onic_pf_mbox_irq_enable(struct onic_private *priv)
 	if (!qdev || !qdev->addr)
 		return;
 
-	dev_info(&priv->pdev->dev,
-		 "PF mbox IRQ enable: caller=%pS sts=0x%08x ctrl_before=0x%08x\n",
-		 __builtin_return_address(0),
-		 qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
-		 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+	// dev_info(&priv->pdev->dev,
+	// 	 "PF mbox IRQ enable: caller=%pS sts=0x%08x ctrl_before=0x%08x\n",
+	// 	 __builtin_return_address(0),
+	// 	 qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+	// 	 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 
 	qdma_write_reg(qdev, QDMA_PF_MBOX_INTR_CTRL,
 		       QDMA_MBOX_INTR_CTRL_EN);
 
-	dev_info(&priv->pdev->dev,
-		 "PF mbox IRQ enable done: ctrl_after=0x%08x\n",
-		 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+	// dev_info(&priv->pdev->dev,
+	// 	 "PF mbox IRQ enable done: ctrl_after=0x%08x\n",
+	// 	 qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 }
 
 int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
@@ -329,12 +329,12 @@ int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
 	// Enable mailbox interrupt
 	onic_pf_mbox_irq_enable(priv);
 
-	dev_info(&priv->pdev->dev,
-		"PF mbox IRQ enabled: vector_index=%u linux_irq=%d sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
-		vector, pci_irq_vector(priv->pdev, vector),
-		qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
-		qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
-		qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+	// dev_info(&priv->pdev->dev,
+	// 	"PF mbox IRQ enabled: vector_index=%u linux_irq=%d sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+	// 	vector, pci_irq_vector(priv->pdev, vector),
+	// 	qdma_read_reg(qdev, QDMA_PF_MBOX_STS),
+	// 	qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
+	// 	qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 
 
 	return 0;

@@ -47,16 +47,16 @@ int onic_vf_mbox_process_one(struct onic_private *priv)
 		return 0;
 	// Đọc ở inbox
 	onic_vf_mbox_read_msg(priv, QDMA_VF_MBOX_IN_MSG, resp);
-	dev_info(&priv->pdev->dev,
-		"VF mbox response: opcode=%u status=%u seq=%u len=%u\n",
-		resp->hdr.opcode, resp->hdr.status,
-		resp->hdr.seq, resp->hdr.len);
+	// dev_info(&priv->pdev->dev,
+	// 	"VF mbox response: opcode=%u status=%u seq=%u len=%u\n",
+	// 	resp->hdr.opcode, resp->hdr.status,
+	// 	resp->hdr.seq, resp->hdr.len);
 	/* Tell PF that VF consumed its response. */
 	// Sau khi ghi RCV thì Function status reg sẽ clear.
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD, QDMA_MBOX_CMD_RCV);
-	dev_info(&priv->pdev->dev,
-		"VF mbox response acked: sts=0x%08x\n",
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
+	// dev_info(&priv->pdev->dev,
+	// 	"VF mbox response acked: sts=0x%08x\n",
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
 	// Đánh thức hàm đang chờ
 	complete(&priv->vf_hw.mbox_done);
 
@@ -66,10 +66,10 @@ int onic_vf_mbox_process_one(struct onic_private *priv)
 static irqreturn_t onic_vf_mbox_irq_handler(int irq, void *data)
 {
 	struct onic_private *priv = data;
-	dev_info(&priv->pdev->dev,
-		"VF mbox IRQ top: sts=0x%08x ctrl=0x%08x\n",
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
+	// dev_info(&priv->pdev->dev,
+	// 	"VF mbox IRQ top: sts=0x%08x ctrl=0x%08x\n",
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 	// Tắt tạm thời interrupt mailbox
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_CTRL, 0);
 
@@ -81,15 +81,15 @@ static irqreturn_t onic_vf_mbox_irq_thread(int irq, void *data)
 	struct onic_private *priv = data;
 	int err;
 
-	dev_info(&priv->pdev->dev,
-		"VF mbox IRQ thread start: sts=0x%08x\n",
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
+	// dev_info(&priv->pdev->dev,
+	// 	"VF mbox IRQ thread start: sts=0x%08x\n",
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
 	// Kiểm tra trạng thái funtion status reg
 	err = onic_vf_mbox_process_one(priv);
 
-	dev_info(&priv->pdev->dev,
-		"VF mbox IRQ thread processed: err=%d sts=0x%08x\n",
-		err, onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
+	// dev_info(&priv->pdev->dev,
+	// 	"VF mbox IRQ thread processed: err=%d sts=0x%08x\n",
+	// 	err, onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
 
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_CTRL,
 			   QDMA_MBOX_INTR_CTRL_EN);
@@ -133,11 +133,11 @@ int onic_vf_mbox_irq_init(struct onic_private *priv, u16 vector)
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_INTR_CTRL,
 			   QDMA_MBOX_INTR_CTRL_EN);
 
-	dev_info(&pdev->dev,
-		"VF mbox IRQ enabled: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
+	// dev_info(&pdev->dev,
+	// 	"VF mbox IRQ enabled: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 
 	return 0;
 }
@@ -207,21 +207,21 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 	req.hdr.opcode = ONIC_MBOX_OP_GET_QUEUE_RES;
 	req.hdr.seq = ++vf_hw->mbox_seq;
 	req.hdr.len = 0;
-	dev_info(&priv->pdev->dev,
-		"VF mbox send prepare: opcode=%u seq=%u sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
-		req.hdr.opcode, req.hdr.seq,
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
-		onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
+	// dev_info(&priv->pdev->dev,
+	// 	"VF mbox send prepare: opcode=%u seq=%u sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+	// 	req.hdr.opcode, req.hdr.seq,
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS),
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
+	// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 	// Ghi message vào mailbox outbox - Outgoing Message Memory
 	onic_vf_mbox_write_msg(priv, QDMA_VF_MBOX_OUT_MSG, &req);
 
 	//Ghi 1 vào msgsend kich hoạt gửi.
 	onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD, QDMA_MBOX_CMD_SEND);
 
-	dev_info(&priv->pdev->dev,
-	 "VF mbox SEND posted: sts=0x%08x\n",
-	 onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
+	// dev_info(&priv->pdev->dev,
+	//  "VF mbox SEND posted: sts=0x%08x\n",
+	//  onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS));
 
 
 	// Chờ response với timeout, xảy ra nếu VF nhận được interrupt response

@@ -134,11 +134,11 @@ static irqreturn_t onic_q_handler(int irq, void *dev_id)
 					QDMA_MBOX_STS_ACK_MASK)) {
 				int err;
 
-				dev_info(&priv->pdev->dev,
-					"PF queue IRQ qid=%u handles mailbox: irq=%d sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
-					qid, irq, mbox_sts,
-					qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
-					qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
+				// dev_info(&priv->pdev->dev,
+				// 	"PF queue IRQ qid=%u handles mailbox: irq=%d sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+				// 	qid, irq, mbox_sts,
+				// 	qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_VEC),
+				// 	qdma_read_reg(qdev, QDMA_PF_MBOX_INTR_CTRL));
 
 				onic_pf_mbox_irq_disable(priv);
 				err = onic_pf_mbox_process_pending(priv);
