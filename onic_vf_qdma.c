@@ -192,7 +192,7 @@ static int onic_vf_init_tx_ring(struct onic_private *priv, u16 qid)
 {
 	struct onic_tx_queue *q;
 	struct onic_ring *ring;
-	struct onic_qdma_h2c_param param;
+	// struct onic_qdma_h2c_param param;
 	u32 real_count, size;
 	u16 vid;
 	int rv;
@@ -241,14 +241,14 @@ static int onic_vf_init_tx_ring(struct onic_private *priv, u16 qid)
 
 	vid = priv->num_q_vectors ? 1 + (qid % priv->num_q_vectors) : 0;
 
-	param.rngcnt_idx = ONIC_VF_TX_RNGCNT_IDX;
-	param.dma_addr = ring->dma_addr;
-	param.vid = vid;
+	// param.rngcnt_idx = ONIC_VF_TX_RNGCNT_IDX;
+	// param.dma_addr = ring->dma_addr;
+	// param.vid = vid;
 
-	rv = onic_qdma_init_tx_queue((unsigned long)priv->vf_hw.qdev,
-				     qid, &param);
-	if (rv)
-		goto err_free_buf;
+	// rv = onic_qdma_init_tx_queue((unsigned long)priv->vf_hw.qdev,
+	// 			     qid, &param);
+	// if (rv)
+	// 	goto err_free_buf;
 
 	priv->tx_queue[qid] = q;
 
@@ -258,8 +258,9 @@ static int onic_vf_init_tx_ring(struct onic_private *priv, u16 qid)
 
 	return 0;
 
-err_free_buf:
-	kfree(q->buffer);
+// err_free_buf:
+// 	kfree(q->buffer);
+
 err_free_dma:
 	dma_free_coherent(&priv->pdev->dev, size, ring->desc, ring->dma_addr);
 err_free_q:
@@ -279,8 +280,8 @@ static void onic_vf_clear_tx_ring(struct onic_private *priv, u16 qid)
 
 	onic_vf_tx_clean(q);
 
-	if (priv->vf_hw.qdev)
-		onic_qdma_clear_tx_queue((unsigned long)priv->vf_hw.qdev, qid);
+	// if (priv->vf_hw.qdev)
+	// 	onic_qdma_clear_tx_queue((unsigned long)priv->vf_hw.qdev, qid);
 
 	ring = &q->ring;
 	real_count = ring->count - 1;
