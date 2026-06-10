@@ -41,6 +41,7 @@ onic_pf-objs := \
 # =========================================================
 onic_vf-objs := \
 	onic_common.o \
+	onic_hardware.o \
 	onic_vf_main.o \
 	onic_vf_hw.o \
 	onic_vf_mbox.o \
