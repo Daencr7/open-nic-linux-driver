@@ -9,6 +9,9 @@
 #include "qdma_device.h"
 #include "qdma_register.h"
 
+
+
+
 static void onic_pf_mbox_write_msg(struct qdma_dev *qdev, u32 offset,
 				   const struct onic_mbox_msg *msg)
 {
@@ -48,6 +51,70 @@ onic_pf_mbox_find_vf_resource(struct onic_private *priv, u16 func_id)
 
 	return NULL;
 }
+
+static int onic_pf_mbox_init_tx_queue(struct onic_private *priv,
+				      u16 src_func_id,
+				      const struct onic_mbox_msg *req,
+				      struct onic_mbox_msg *resp)
+{
+	
+	struct qdma_dev *pf_qdev = (struct qdma_dev *)priv->hw.qdma;
+	struct onic_vf_resource *res;
+	struct qdma_dev vf_qdev = {0};
+	struct onic_qdma_h2c_param param = {0};
+	u32 local_qid = req->data.txq_init.local_qid;
+	int err;
+
+	memset(resp, 0, sizeof(*resp));
+	resp->hdr.opcode = ONIC_MBOX_OP_TX_QUEUE_INIT_RESP;
+	resp->hdr.status = ONIC_MBOX_STS_ERR;
+	resp->hdr.seq = req->hdr.seq;
+	resp->hdr.len = sizeof(resp->data.txq_resp);
+
+	res = onic_pf_mbox_find_vf_resource(priv, src_func_id);
+	if (!res)
+		return -ENOENT;
+
+	if (req->hdr.len != sizeof(req->data.txq_init))
+		return -EINVAL;
+
+	if (local_qid >= res->qmax)
+		return -ERANGE;
+
+	if (!req->data.txq_init.desc_dma_addr)
+		return -EINVAL;
+
+	if (!pf_qdev || !pf_qdev->addr)
+		return -ENODEV;
+		
+	vf_qdev.pdev = priv->pdev;
+	vf_qdev.addr = pf_qdev->addr;
+	vf_qdev.func_id = res->func_id;
+	vf_qdev.q_base = res->qbase;
+	vf_qdev.num_queues = res->qmax;
+
+	param.rngcnt_idx = req->data.txq_init.rngcnt_idx;
+	param.dma_addr = (dma_addr_t)req->data.txq_init.desc_dma_addr;
+	param.vid = req->data.txq_init.vector;
+
+	err = onic_qdma_init_tx_queue((unsigned long)&vf_qdev,
+				      local_qid, &param);
+	if (err)
+		return err;
+
+	resp->hdr.status = ONIC_MBOX_STS_OK;
+	resp->data.txq_resp.func_id = res->func_id;
+	resp->data.txq_resp.local_qid = local_qid;
+	resp->data.txq_resp.global_qid = res->qbase + local_qid;
+
+	dev_info(&priv->pdev->dev,
+		 "PF init VF TX queue: func_id=%u local_qid=%u global_qid=%u dma=%pad\n",
+		 res->func_id, local_qid, res->qbase + local_qid,
+		 &param.dma_addr);
+
+	return 0;
+}
+
 
 static int
 onic_pf_mbox_make_queue_res_resp(struct onic_private *priv, u16 src_func_id,
@@ -120,19 +187,21 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 	resp.hdr.seq = req.hdr.seq;
 
 	switch (req.hdr.opcode) {
-	case ONIC_MBOX_OP_GET_QUEUE_RES:
-		if (req.hdr.len != 0) {
-			err = -EINVAL;
+		case ONIC_MBOX_OP_GET_QUEUE_RES:
+			if (req.hdr.len != 0) {
+				err = -EINVAL;
+				break;
+			}
+
+			err = onic_pf_mbox_make_queue_res_resp(priv, src_func_id,
+								req.hdr.seq, &resp);
 			break;
-		}
-
-		err = onic_pf_mbox_make_queue_res_resp(priv, src_func_id,
-						      req.hdr.seq, &resp);
-		break;
-
-	default:
-		err = -EOPNOTSUPP;
-		break;
+		case ONIC_MBOX_OP_TX_QUEUE_INIT:
+			err = onic_pf_mbox_init_tx_queue(priv, src_func_id, &req, &resp);
+			break;
+		default:
+			err = -EOPNOTSUPP;
+			break;
 	}
 
 	/* Release the VF request after its contents have been copied. */
@@ -147,16 +216,23 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 	//  src_func_id, resp.hdr.opcode, resp.hdr.status,
 	//  resp.hdr.seq, resp.hdr.len,
 	//  qdma_read_reg(qdev, QDMA_PF_MBOX_STS));
-	if (err)
+	if (err) {
 		dev_warn(&priv->pdev->dev,
 			 "PF mbox rejected request: func_id=%u opcode=%u err=%d\n",
 			 src_func_id, req.hdr.opcode, err);
-	else
+	} else if (req.hdr.opcode == ONIC_MBOX_OP_GET_QUEUE_RES) {
 		dev_info(&priv->pdev->dev,
-			 "PF mbox queue resource: func_id=%u qbase=%u qmax=%u\n",
-			 resp.data.qres.func_id,
-			 resp.data.qres.qbase,
-			 resp.data.qres.qmax);
+			"PF mbox queue resource: func_id=%u qbase=%u qmax=%u\n",
+			resp.data.qres.func_id,
+			resp.data.qres.qbase,
+			resp.data.qres.qmax);
+	} else if (req.hdr.opcode == ONIC_MBOX_OP_TX_QUEUE_INIT) {
+		dev_info(&priv->pdev->dev,
+			"PF mbox TX queue init done: func_id=%u local_qid=%u global_qid=%u\n",
+			resp.data.txq_resp.func_id,
+			resp.data.txq_resp.local_qid,
+			resp.data.txq_resp.global_qid);
+	}
 
 	return 1;
 }
@@ -339,3 +415,4 @@ int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
 
 	return 0;
 }
+

@@ -41,7 +41,7 @@ static inline u16 onic_vf_global_qid(struct onic_private *priv, u16 local_qid)
 #include "onic_common.h"
 #include "onic_hardware.h"
 #include "qdma_register.h"
-
+#include "onic_vf_mbox.h"
 
 #define ONIC_VF_TX_RNGCNT_IDX       0
 #define ONIC_VF_RX_DESC_RNGCNT_IDX  8
@@ -244,11 +244,13 @@ static int onic_vf_init_tx_ring(struct onic_private *priv, u16 qid)
 	// param.rngcnt_idx = ONIC_VF_TX_RNGCNT_IDX;
 	// param.dma_addr = ring->dma_addr;
 	// param.vid = vid;
+	// tam thoi cho VF tự init queue, chưa cần PF init hộ
+	vid = 0;
 
-	// rv = onic_qdma_init_tx_queue((unsigned long)priv->vf_hw.qdev,
-	// 			     qid, &param);
-	// if (rv)
-	// 	goto err_free_buf;
+	rv = onic_vf_mbox_init_tx_queue(priv, qid, ring->dma_addr,
+					ONIC_VF_TX_RNGCNT_IDX, vid);
+	if (rv)
+		goto err_free_buf;
 
 	priv->tx_queue[qid] = q;
 
@@ -258,9 +260,8 @@ static int onic_vf_init_tx_ring(struct onic_private *priv, u16 qid)
 
 	return 0;
 
-// err_free_buf:
-// 	kfree(q->buffer);
-
+err_free_buf:
+	kfree(q->buffer);
 err_free_dma:
 	dma_free_coherent(&priv->pdev->dev, size, ring->desc, ring->dma_addr);
 err_free_q:

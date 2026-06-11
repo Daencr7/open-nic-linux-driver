@@ -327,13 +327,13 @@ void onic_qdma_init_error_interrupt(unsigned long qdma, u16 vid)
 	qdma_write_reg(qdev, offset, val);
 
 
-	dev_info(&qdev->pdev->dev,
-	 "QDMA sticky err before clear: glbl=0x%08x dsc=0x%08x trq=0x%08x c2h=0x%08x h2c=0x%08x\n",
-	 qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_STAT),
-	 qdma_read_reg(qdev, QDMA_OFFSET_GLBL_DSC_ERR_STS),
-	 qdma_read_reg(qdev, QDMA_OFFSET_GLBL_TRQ_ERR_STS),
-	 qdma_read_reg(qdev, QDMA_OFFSET_C2H_ERR_STAT),
-	 qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT));
+	// dev_info(&qdev->pdev->dev,
+	// 	"QDMA sticky err before clear: glbl=0x%08x dsc=0x%08x trq=0x%08x c2h=0x%08x h2c=0x%08x\n",
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_STAT),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_DSC_ERR_STS),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_TRQ_ERR_STS),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_C2H_ERR_STAT),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT));
 
 	qdma_write_reg(qdev, QDMA_OFFSET_GLBL_TRQ_ERR_STS,
 		       QDMA_GLBL_TRQ_ERR_ALL_MASK);
@@ -343,14 +343,19 @@ void onic_qdma_init_error_interrupt(unsigned long qdma, u16 vid)
 		       QDMA_C2H_ERR_ALL_MASK);
 	qdma_write_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT,
 		       QDMA_H2C_ERR_ALL_MASK);
-			   
-dev_info(&qdev->pdev->dev,
-	 "QDMA sticky err after clear: glbl=0x%08x dsc=0x%08x trq=0x%08x c2h=0x%08x h2c=0x%08x\n",
-	 qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_STAT),
-	 qdma_read_reg(qdev, QDMA_OFFSET_GLBL_DSC_ERR_STS),
-	 qdma_read_reg(qdev, QDMA_OFFSET_GLBL_TRQ_ERR_STS),
-	 qdma_read_reg(qdev, QDMA_OFFSET_C2H_ERR_STAT),
-	 qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT));
+	qdma_write_reg(qdev, QDMA_OFFSET_GLBL_ERR_STAT,
+	       QDMA_GLBL_ERR_DSC_MASK |
+	       QDMA_GLBL_ERR_TRQ_MASK |
+	       QDMA_GLBL_ERR_ST_C2H_MASK |
+	       QDMA_GLBL_ERR_ST_H2C_MASK);
+
+	// dev_info(&qdev->pdev->dev,
+	// 	"QDMA sticky err after clear: glbl=0x%08x dsc=0x%08x trq=0x%08x c2h=0x%08x h2c=0x%08x\n",
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_ERR_STAT),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_DSC_ERR_STS),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_GLBL_TRQ_ERR_STS),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_C2H_ERR_STAT),
+	// 	qdma_read_reg(qdev, QDMA_OFFSET_H2C_ERR_STAT));
 
 	for (i = 0; i < NUM_LEAF_ERROR_AGGREGATORS; i++) {
 		u32 err_idx = leaf_error_aggregators[i];
