@@ -52,15 +52,33 @@ static inline u16 onic_vf_global_qid(struct onic_private *priv, u16 local_qid)
 	return priv->vf_hw.qbase + local_qid;
 }
 
+// static void onic_vf_set_tx_head(struct onic_private *priv, u16 qid, u16 head)
+// {
+//     u32 val;
+
+//     val = FIELD_SET(QDMA_DMAP_SEL_DESC_PIDX_MASK, head);
+//     onic_vf_write_bar0(priv,
+//         QDMA_OFFSET_VF_DMAP_SEL_H2C_DESC_PIDX + qid * 16,
+//         val);
+// }
+
 static void onic_vf_set_tx_head(struct onic_private *priv, u16 qid, u16 head)
 {
-    u32 val;
+	u32 offset;
+	u32 val;
+	u32 rb;
 
-    val = FIELD_SET(QDMA_DMAP_SEL_DESC_PIDX_MASK, head);
-    onic_vf_write_bar0(priv,
-        QDMA_OFFSET_VF_DMAP_SEL_H2C_DESC_PIDX + qid * 16,
-        val);
+	offset = QDMA_OFFSET_VF_DMAP_SEL_H2C_DESC_PIDX + qid * 16;
+	val = FIELD_SET(QDMA_DMAP_SEL_DESC_PIDX_MASK, head);
+
+	onic_vf_write_bar0(priv, offset, val);
+	rb = onic_vf_read_bar0(priv, offset);
+
+	dev_info(&priv->pdev->dev,
+		 "VF TX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
+		 qid, offset, head, val, rb);
 }
+
 static inline u16 onic_vf_ring_real_count(struct onic_ring *ring)
 {
 	return ring->wb ? ring->count - 1 : ring->count;
