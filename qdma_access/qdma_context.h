@@ -292,6 +292,14 @@ struct qdma_fmap_ctxt {
 int qdma_write_sw_ctxt(struct qdma_dev *dev, u16 qid, enum qdma_dir dir,
 		       const struct qdma_sw_ctxt *ctxt);
 
+int qdma_read_sw_ctxt(struct qdma_dev *dev, u16 qid, enum qdma_dir dir,
+		      struct qdma_sw_ctxt *ctxt);
+int qdma_read_hw_ctxt(struct qdma_dev *dev, u16 qid, enum qdma_dir dir,
+		      struct qdma_hw_ctxt *ctxt);
+int qdma_read_cr_ctxt(struct qdma_dev *dev, u16 qid, enum qdma_dir dir,
+		      struct qdma_cr_ctxt *ctxt);
+
+
 /**
  * qdma_clear_sw_ctxt - Clear descriptor queue software context
  * @dev: pointer to QDMA device

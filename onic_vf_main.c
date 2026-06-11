@@ -163,15 +163,26 @@ static int onic_vf_probe(struct pci_dev *pdev,
 		return err;
 	}
 
-	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	// err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	// if (err) {
+	// 	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
+	// 	if (err) {
+	// 		dev_err(&pdev->dev, "DMA mask setup failed: %d\n", err);
+	// 		goto err_disable_device;
+	// 	}
+	// }
+	err = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
 	if (err) {
-		err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
-		if (err) {
-			dev_err(&pdev->dev, "DMA mask setup failed: %d\n", err);
-			goto err_disable_device;
-		}
+		dev_err(&pdev->dev, "Failed to set VF DMA mask: %d\n", err);
+		goto err_disable_device;
 	}
 
+	err = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
+	if (err) {
+		dev_err(&pdev->dev, "Failed to set VF coherent DMA mask: %d\n", err);
+		goto err_disable_device;
+	}
+	
 	err = pci_request_mem_regions(pdev, onic_drv_name);
 	if (err) {
 		dev_err(&pdev->dev, "pci_request_mem_regions failed: %d\n", err);

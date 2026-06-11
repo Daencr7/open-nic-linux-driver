@@ -8,7 +8,7 @@
 #include "onic_mbox.h"
 #include "qdma_device.h"
 #include "qdma_register.h"
-
+#include "qdma_context.h"
 
 
 
@@ -106,7 +106,42 @@ static int onic_pf_mbox_init_tx_queue(struct onic_private *priv,
 		vf_qdev.func_id, vf_qdev.q_base, local_qid,
 		vf_qdev.q_base + local_qid,
 		param.rngcnt_idx, param.vid, &param.dma_addr);
-		
+
+	{
+		struct qdma_sw_ctxt sw = {0};
+		struct qdma_hw_ctxt hw = {0};
+		struct qdma_cr_ctxt cr = {0};
+		dma_addr_t desc_base;
+		int rd;
+
+		rd = qdma_read_sw_ctxt(&vf_qdev, local_qid, QDMA_H2C, &sw);
+		if (!rd) {
+			desc_base = (dma_addr_t)sw.desc_base;
+			dev_info(&priv->pdev->dev,
+				"PF TXQ SW readback: func_id=%u local_qid=%u global_qid=%u qen=%u pidx=%u desc_base=%pad rng=%u desc_sz=%u wbk_en=%u irq_en=%u vec=%u\n",
+				sw.func_id, local_qid, vf_qdev.q_base + local_qid,
+				sw.qen, sw.pidx, &desc_base, sw.rngsz_idx,
+				sw.desc_sz, sw.wbk_en, sw.irq_en, sw.vec);
+		} else {
+			dev_err(&priv->pdev->dev,
+				"PF TXQ SW readback failed: local_qid=%u err=%d\n",
+				local_qid, rd);
+		}
+
+		rd = qdma_read_hw_ctxt(&vf_qdev, local_qid, QDMA_H2C, &hw);
+		if (!rd)
+			dev_info(&priv->pdev->dev,
+				"PF TXQ HW readback: local_qid=%u cidx=%u crd_use=%u desc_pend=%u fetch_pend=%u event_pend=%u idle=%u\n",
+				local_qid, hw.cidx, hw.crd_use, hw.desc_pend,
+				hw.fetch_pend, hw.event_pend, hw.idl_stp_b);
+
+		rd = qdma_read_cr_ctxt(&vf_qdev, local_qid, QDMA_H2C, &cr);
+		if (!rd)
+			dev_info(&priv->pdev->dev,
+				"PF TXQ CR readback: local_qid=%u credit=%u\n",
+				local_qid, cr.credit);
+	}
+
 	resp->hdr.status = ONIC_MBOX_STS_OK;
 	resp->data.txq_resp.func_id = res->func_id;
 	resp->data.txq_resp.local_qid = local_qid;

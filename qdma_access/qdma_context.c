@@ -15,10 +15,10 @@
  * the file called "COPYING".
  */
 #include <asm-generic/delay.h>
+#include <linux/string.h>
 
 #include "qdma_register.h"
 #include "qdma_context.h"
-
 static DEFINE_MUTEX(ctxt_lock);
 
 /**
@@ -164,6 +164,111 @@ int qdma_write_sw_ctxt(struct qdma_dev *qdev, u16 qid, enum qdma_dir dir,
 	BUG_ON(num_words != QDMA_SW_CTXT_NUM_WORDS);
 	return qdma_program_ctxt(qdev, &cmd, data, num_words);
 }
+// Add by edna
+int qdma_read_sw_ctxt(struct qdma_dev *qdev, u16 qid, enum qdma_dir dir,
+		      struct qdma_sw_ctxt *ctxt)
+{
+	union qdma_ctxt_cmd cmd;
+	u32 data[QDMA_SW_CTXT_NUM_WORDS] = {0};
+	int rv;
+
+	cmd.word = 0;
+	cmd.bits.sel = (dir == QDMA_C2H) ?
+		QDMA_CTXT_CMD_SEL_SW_C2H : QDMA_CTXT_CMD_SEL_SW_H2C;
+	cmd.bits.op = QDMA_CTXT_CMD_OP_RD;
+	cmd.bits.qid = qdma_get_real_qid(qdev, qid);
+
+	rv = qdma_program_ctxt(qdev, &cmd, data, QDMA_SW_CTXT_NUM_WORDS);
+	if (rv)
+		return rv;
+
+	memset(ctxt, 0, sizeof(*ctxt));
+
+	ctxt->pidx = BITFIELD_GET(QDMA_SW_CTXT_W0_PIDX_MASK, data[0]);
+	ctxt->irq_arm = BITFIELD_GET(QDMA_SW_CTXT_W0_IRQ_ARM_MASK, data[0]);
+	ctxt->func_id = BITFIELD_GET(QDMA_SW_CTXT_W0_FUNC_ID_MASK, data[0]);
+
+	ctxt->qen = BITFIELD_GET(QDMA_SW_CTXT_W1_QEN_MASK, data[1]);
+	ctxt->fcrd_en = BITFIELD_GET(QDMA_SW_CTXT_W1_FCRD_EN_MASK, data[1]);
+	ctxt->wbi_chk = BITFIELD_GET(QDMA_SW_CTXT_W1_WBI_CHK_MASK, data[1]);
+	ctxt->wbi_intvl_en = BITFIELD_GET(QDMA_SW_CTXT_W1_WBI_INTVL_EN_MASK, data[1]);
+	ctxt->at = BITFIELD_GET(QDMA_SW_CTXT_W1_AT_MASK, data[1]);
+	ctxt->fetch_max = BITFIELD_GET(QDMA_SW_CTXT_W1_FETCH_MAX_MASK, data[1]);
+	ctxt->rngsz_idx = BITFIELD_GET(QDMA_SW_CTXT_W1_RNG_SZ_MASK, data[1]);
+	ctxt->desc_sz = BITFIELD_GET(QDMA_SW_CTXT_W1_DESC_SZ_MASK, data[1]);
+	ctxt->bypass = BITFIELD_GET(QDMA_SW_CTXT_W1_BYPASS_MASK, data[1]);
+	ctxt->mm_chn = BITFIELD_GET(QDMA_SW_CTXT_W1_MM_CHN_MASK, data[1]);
+	ctxt->wbk_en = BITFIELD_GET(QDMA_SW_CTXT_W1_WBK_EN_MASK, data[1]);
+	ctxt->irq_en = BITFIELD_GET(QDMA_SW_CTXT_W1_IRQ_EN_MASK, data[1]);
+	ctxt->port_id = BITFIELD_GET(QDMA_SW_CTXT_W1_PORT_ID_MASK, data[1]);
+	ctxt->irq_no_last = BITFIELD_GET(QDMA_SW_CTXT_W1_IRQ_NO_LAST_MASK, data[1]);
+	ctxt->err = BITFIELD_GET(QDMA_SW_CTXT_W1_ERR_MASK, data[1]);
+	ctxt->err_wb_sent = BITFIELD_GET(QDMA_SW_CTXT_W1_ERR_WB_SENT_MASK, data[1]);
+	ctxt->irq_req = BITFIELD_GET(QDMA_SW_CTXT_W1_IRQ_REQ_MASK, data[1]);
+	ctxt->mrkr_dis = BITFIELD_GET(QDMA_SW_CTXT_W1_MRKR_DIS_MASK, data[1]);
+	ctxt->is_mm = BITFIELD_GET(QDMA_SW_CTXT_W1_IS_MM_MASK, data[1]);
+
+	ctxt->desc_base = ((u64)data[3] << 32) | data[2];
+
+	ctxt->vec = BITFIELD_GET(QDMA_SW_CTXT_W4_VEC_MASK, data[4]);
+	ctxt->intr_aggr = BITFIELD_GET(QDMA_SW_CTXT_W4_INTR_AGGR_MASK, data[4]);
+
+	return 0;
+}
+
+int qdma_read_hw_ctxt(struct qdma_dev *qdev, u16 qid, enum qdma_dir dir,
+		      struct qdma_hw_ctxt *ctxt)
+{
+	union qdma_ctxt_cmd cmd;
+	u32 data[QDMA_HW_CTXT_NUM_WORDS] = {0};
+	int rv;
+
+	cmd.word = 0;
+	cmd.bits.sel = (dir == QDMA_C2H) ?
+		QDMA_CTXT_CMD_SEL_HW_C2H : QDMA_CTXT_CMD_SEL_HW_H2C;
+	cmd.bits.op = QDMA_CTXT_CMD_OP_RD;
+	cmd.bits.qid = qdma_get_real_qid(qdev, qid);
+
+	rv = qdma_program_ctxt(qdev, &cmd, data, QDMA_HW_CTXT_NUM_WORDS);
+	if (rv)
+		return rv;
+
+	memset(ctxt, 0, sizeof(*ctxt));
+
+	ctxt->cidx = BITFIELD_GET(QDMA_HW_CTXT_W0_CIDX_MASK, data[0]);
+	ctxt->crd_use = BITFIELD_GET(QDMA_HW_CTXT_W0_CRD_USE_MASK, data[0]);
+	ctxt->desc_pend = BITFIELD_GET(QDMA_HW_CTXT_W1_DESC_PEND_MASK, data[1]);
+	ctxt->idl_stp_b = BITFIELD_GET(QDMA_HW_CTXT_W1_IDL_STP_B_MASK, data[1]);
+	ctxt->event_pend = BITFIELD_GET(QDMA_HW_CTXT_W1_EVENT_PEND_MASK, data[1]);
+	ctxt->fetch_pend = BITFIELD_GET(QDMA_HW_CTXT_W1_FETCH_PEND_MASK, data[1]);
+
+	return 0;
+}
+
+int qdma_read_cr_ctxt(struct qdma_dev *qdev, u16 qid, enum qdma_dir dir,
+		      struct qdma_cr_ctxt *ctxt)
+{
+	union qdma_ctxt_cmd cmd;
+	u32 data[QDMA_CR_CTXT_NUM_WORDS] = {0};
+	int rv;
+
+	cmd.word = 0;
+	cmd.bits.sel = (dir == QDMA_C2H) ?
+		QDMA_CTXT_CMD_SEL_CR_C2H : QDMA_CTXT_CMD_SEL_CR_H2C;
+	cmd.bits.op = QDMA_CTXT_CMD_OP_RD;
+	cmd.bits.qid = qdma_get_real_qid(qdev, qid);
+
+	rv = qdma_program_ctxt(qdev, &cmd, data, QDMA_CR_CTXT_NUM_WORDS);
+	if (rv)
+		return rv;
+
+	memset(ctxt, 0, sizeof(*ctxt));
+
+	ctxt->credit = BITFIELD_GET(QDMA_CR_CTXT_W0_CREDIT_MASK, data[0]);
+
+	return 0;
+}
+
 
 int qdma_clear_sw_ctxt(struct qdma_dev *qdev, u16 qid, enum qdma_dir dir)
 {
