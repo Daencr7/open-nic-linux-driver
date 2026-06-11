@@ -391,3 +391,78 @@ out_unlock:
 	mutex_unlock(&vf_hw->mbox_lock);
 	return err;
 }
+
+int onic_vf_mbox_clear_tx_queue(struct onic_private *priv, u16 local_qid)
+{
+	struct onic_vf_hardware *vf_hw = &priv->vf_hw;
+	struct onic_mbox_msg req = {0};
+	struct onic_mbox_msg *resp = &vf_hw->mbox_resp;
+	unsigned long timeout;
+	u32 status;
+	int err = 0;
+
+	if (!vf_hw->resource_valid)
+		return -EINVAL;
+
+	if (local_qid >= vf_hw->qmax)
+		return -ERANGE;
+
+	mutex_lock(&vf_hw->mbox_lock);
+
+	err = onic_vf_mbox_drop_stale_responses(priv);
+	if (err < 0)
+		goto out_unlock;
+
+	status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
+	if (status & QDMA_MBOX_STS_O_MSG_MASK) {
+		err = -EBUSY;
+		goto out_unlock;
+	}
+
+	reinit_completion(&vf_hw->mbox_done);
+	memset(resp, 0, sizeof(*resp));
+
+	req.hdr.opcode = ONIC_MBOX_OP_TX_QUEUE_CLEAR;
+	req.hdr.seq = ++vf_hw->mbox_seq;
+	req.hdr.len = sizeof(req.data.txq_clear);
+	req.data.txq_clear.local_qid = local_qid;
+
+	onic_vf_mbox_write_msg(priv, QDMA_VF_MBOX_OUT_MSG, &req);
+	onic_vf_write_bar0(priv, QDMA_VF_MBOX_CMD, QDMA_MBOX_CMD_SEND);
+
+	timeout = wait_for_completion_timeout(&vf_hw->mbox_done,
+					      msecs_to_jiffies(200));
+	if (!timeout) {
+		status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
+		if (status & QDMA_MBOX_STS_I_MSG_MASK) {
+			err = onic_vf_mbox_process_one(priv);
+			if (err > 0) {
+				err = 0;
+				goto validate_response;
+			}
+		}
+
+		err = -ETIMEDOUT;
+		goto out_unlock;
+	}
+
+validate_response:
+	if (resp->hdr.opcode != ONIC_MBOX_OP_TX_QUEUE_CLEAR_RESP ||
+	    resp->hdr.seq != req.hdr.seq ||
+	    resp->hdr.status != ONIC_MBOX_STS_OK ||
+	    resp->hdr.len != sizeof(resp->data.txq_resp) ||
+	    resp->data.txq_resp.local_qid != local_qid) {
+		err = -EPROTO;
+		goto out_unlock;
+	}
+
+	dev_info(&priv->pdev->dev,
+		 "VF TXQ context cleared: func_id=%u local_qid=%u global_qid=%u\n",
+		 resp->data.txq_resp.func_id,
+		 resp->data.txq_resp.local_qid,
+		 resp->data.txq_resp.global_qid);
+
+out_unlock:
+	mutex_unlock(&vf_hw->mbox_lock);
+	return err;
+}

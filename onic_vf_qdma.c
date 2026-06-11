@@ -281,8 +281,14 @@ static void onic_vf_clear_tx_ring(struct onic_private *priv, u16 qid)
 
 	onic_vf_tx_clean(q);
 
-	// if (priv->vf_hw.qdev)
-	// 	onic_qdma_clear_tx_queue((unsigned long)priv->vf_hw.qdev, qid);
+	if (priv->vf_hw.resource_valid) {
+		int rv = onic_vf_mbox_clear_tx_queue(priv, qid);
+
+		if (rv)
+			netdev_warn(priv->netdev,
+					"VF TXQ context clear failed: qid=%u err=%d\n",
+					qid, rv);
+	}
 
 	ring = &q->ring;
 	real_count = ring->count - 1;

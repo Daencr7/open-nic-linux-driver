@@ -115,6 +115,54 @@ static int onic_pf_mbox_init_tx_queue(struct onic_private *priv,
 	return 0;
 }
 
+static int onic_pf_mbox_clear_tx_queue(struct onic_private *priv,
+				       u16 src_func_id,
+				       const struct onic_mbox_msg *req,
+				       struct onic_mbox_msg *resp)
+{
+	struct qdma_dev *pf_qdev = (struct qdma_dev *)priv->hw.qdma;
+	struct onic_vf_resource *res;
+	struct qdma_dev vf_qdev = {0};
+	u32 local_qid = req->data.txq_clear.local_qid;
+
+	memset(resp, 0, sizeof(*resp));
+	resp->hdr.opcode = ONIC_MBOX_OP_TX_QUEUE_CLEAR_RESP;
+	resp->hdr.status = ONIC_MBOX_STS_ERR;
+	resp->hdr.seq = req->hdr.seq;
+	resp->hdr.len = sizeof(resp->data.txq_resp);
+
+	if (!pf_qdev || !pf_qdev->addr)
+		return -ENODEV;
+
+	res = onic_pf_mbox_find_vf_resource(priv, src_func_id);
+	if (!res)
+		return -ENOENT;
+
+	if (req->hdr.len != sizeof(req->data.txq_clear))
+		return -EINVAL;
+
+	if (local_qid >= res->qmax)
+		return -ERANGE;
+
+	vf_qdev.pdev = priv->pdev;
+	vf_qdev.addr = pf_qdev->addr;
+	vf_qdev.func_id = res->func_id;
+	vf_qdev.q_base = res->qbase;
+	vf_qdev.num_queues = res->qmax;
+
+	onic_qdma_clear_tx_queue((unsigned long)&vf_qdev, local_qid);
+
+	resp->hdr.status = ONIC_MBOX_STS_OK;
+	resp->data.txq_resp.func_id = res->func_id;
+	resp->data.txq_resp.local_qid = local_qid;
+	resp->data.txq_resp.global_qid = res->qbase + local_qid;
+
+	dev_info(&priv->pdev->dev,
+		 "PF clear VF TX queue: func_id=%u local_qid=%u global_qid=%u\n",
+		 res->func_id, local_qid, res->qbase + local_qid);
+
+	return 0;
+}
 
 static int
 onic_pf_mbox_make_queue_res_resp(struct onic_private *priv, u16 src_func_id,
@@ -192,13 +240,17 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 				err = -EINVAL;
 				break;
 			}
-
 			err = onic_pf_mbox_make_queue_res_resp(priv, src_func_id,
 								req.hdr.seq, &resp);
 			break;
 		case ONIC_MBOX_OP_TX_QUEUE_INIT:
 			err = onic_pf_mbox_init_tx_queue(priv, src_func_id, &req, &resp);
 			break;
+
+		case ONIC_MBOX_OP_TX_QUEUE_CLEAR:
+			err = onic_pf_mbox_clear_tx_queue(priv, src_func_id, &req, &resp);
+			break;
+
 		default:
 			err = -EOPNOTSUPP;
 			break;
@@ -232,10 +284,17 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 			resp.data.txq_resp.func_id,
 			resp.data.txq_resp.local_qid,
 			resp.data.txq_resp.global_qid);
+	} else if (req.hdr.opcode == ONIC_MBOX_OP_TX_QUEUE_CLEAR) {
+		dev_info(&priv->pdev->dev,
+			"PF mbox TX queue clear done: func_id=%u local_qid=%u global_qid=%u\n",
+			resp.data.txq_resp.func_id,
+			resp.data.txq_resp.local_qid,
+			resp.data.txq_resp.global_qid);
 	}
-
 	return 1;
+
 }
+
 static int onic_pf_mbox_process_acks(struct onic_private *priv)
 {
 	struct qdma_dev *qdev = (struct qdma_dev *)priv->hw.qdma;
