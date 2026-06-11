@@ -214,8 +214,10 @@ static void onic_clear_q_vector(struct onic_private *priv, u16 vid)
 
 	if (!vec)
 		return;
+
 	free_irq(pci_irq_vector(priv->pdev, vid), vec);
 	kfree(vec);
+	priv->q_vector[vid] = NULL;
 }
 
 /**
@@ -385,21 +387,26 @@ clear_interrupt:
 void onic_clear_interrupt(struct onic_private *priv)
 {
 	u8 master_pf = test_bit(ONIC_FLAG_MASTER_PF, priv->flags);
-	int vid = (master_pf) ?
-		priv->num_q_vectors + 1 :
-		priv->num_q_vectors;
+	bool user_intr = test_bit(ONIC_USER_INTR, priv->state);
+	bool error_intr = test_bit(ONIC_ERROR_INTR, priv->state);
+	int vid = master_pf ? priv->num_q_vectors + 1 : priv->num_q_vectors;
+
 	if (master_pf)
 		onic_pf_mbox_irq_disable(priv);
+
 	if (master_pf) {
-		if (test_bit(ONIC_ERROR_INTR, priv->state)) {
+		if (error_intr) {
 			free_irq(pci_irq_vector(priv->pdev, vid), priv);
 			onic_qdma_clear_error_interrupt(priv->hw.qdma);
+			clear_bit(ONIC_ERROR_INTR, priv->state);
 		}
 		vid--;
 	}
 
-	if (test_bit(ONIC_USER_INTR, priv->state))
+	if (user_intr) {
 		free_irq(pci_irq_vector(priv->pdev, vid), priv);
+		clear_bit(ONIC_USER_INTR, priv->state);
+	}
 
 	while (vid--)
 		onic_clear_q_vector(priv, vid);

@@ -122,7 +122,8 @@ static void onic_vf_tx_clean(struct onic_tx_queue *q)
 		return;
 
 	qdma_unpack_wb_stat(&wb, ring->wb);
-
+	if (wb.cidx >= onic_vf_ring_real_count(ring))
+		goto out;
 	if (wb.cidx == ring->next_to_clean)
 		goto out;
 

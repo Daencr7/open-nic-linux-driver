@@ -245,6 +245,8 @@ int onic_init_hardware(struct onic_private *priv)
 	if (!qdev)
 		return -ENOMEM;
 
+    hw->qdma = (unsigned long)qdev;
+	
 	func_id = PCI_FUNC(pdev->devfn);
 	qbase = func_id * ONIC_MAX_QUEUES;
 	qmax = max(priv->num_tx_queues, priv->num_rx_queues);
@@ -276,7 +278,6 @@ int onic_init_hardware(struct onic_private *priv)
 	if (master_pf)
 		onic_qdma_init_csr(qdev);
 
-    hw->qdma = (unsigned long)qdev;
 
 	/* get the number of CMAC instances */
 	for (i = 0; i < ONIC_MAX_CMACS; ++i) {
