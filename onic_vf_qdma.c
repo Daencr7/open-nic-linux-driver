@@ -412,7 +412,7 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 		wmb();
 		onic_vf_set_tx_head(priv, qid, ring->next_to_use);
 		
-		if ((netdev->stats.tx_packets & 0x3f) == 0) {
+		// if ((netdev->stats.tx_packets & 0x3f) == 0) {
 			struct qdma_wb_stat wb;
 
 			memset(&wb, 0, sizeof(wb));
@@ -423,7 +423,7 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 					"VF TX debug: qid=%u pidx=%u sw_cidx=%u wb_cidx=%u len=%u\n",
 					qid, ring->next_to_use, ring->next_to_clean,
 					wb.cidx, skb->len);
-			}
+		// }
 	}
 
 	return NETDEV_TX_OK;

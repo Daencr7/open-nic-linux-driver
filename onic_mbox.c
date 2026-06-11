@@ -101,7 +101,12 @@ static int onic_pf_mbox_init_tx_queue(struct onic_private *priv,
 				      local_qid, &param);
 	if (err)
 		return err;
-
+	dev_info(&priv->pdev->dev,
+		"PF TXQ ctx init params: func_id=%u qbase=%u local_qid=%u global_qid=%u rng=%u vec=%u dma=%pad\n",
+		vf_qdev.func_id, vf_qdev.q_base, local_qid,
+		vf_qdev.q_base + local_qid,
+		param.rngcnt_idx, param.vid, &param.dma_addr);
+		
 	resp->hdr.status = ONIC_MBOX_STS_OK;
 	resp->data.txq_resp.func_id = res->func_id;
 	resp->data.txq_resp.local_qid = local_qid;
