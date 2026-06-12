@@ -122,6 +122,20 @@ static void onic_vf_tx_clean(struct onic_tx_queue *q)
 		return;
 
 	qdma_unpack_wb_stat(&wb, ring->wb);
+
+	// {
+	// 	u64 wb_raw = 0;
+
+	// 	dma_rmb();
+	// 	if (ring->wb)
+	// 		wb_raw = *(u64 *)ring->wb;
+
+	// 	netdev_info(q->netdev,
+	// 			"VF TX wb: qid=%u raw=0x%016llx sw_cidx=%u wb_pidx=%u wb_cidx=%u\n",
+	// 			q->qid, (unsigned long long)wb_raw,
+	// 			ring->next_to_clean, wb.pidx, wb.cidx);
+	// }
+
 	if (wb.cidx >= onic_vf_ring_real_count(ring))
 		goto out;
 	if (wb.cidx == ring->next_to_clean)
@@ -416,6 +430,17 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 	desc.src_addr = dma_addr;
 	desc.metadata = skb->len;
 	qdma_pack_h2c_st_desc(desc_ptr, &desc);
+
+	// {
+	// 	u64 *dw = (u64 *)desc_ptr;
+
+	// 	netdev_info(netdev,
+	// 			"VF TX desc: qid=%u idx=%u dw0=0x%016llx dw1=0x%016llx skb_dma=%pad len=%u ring_dma=%pad\n",
+	// 			qid, ring->next_to_use,
+	// 			(unsigned long long)dw[0],
+	// 			(unsigned long long)dw[1],
+	// 			&dma_addr, skb->len, &ring->dma_addr);
+	// }
 
 	q->buffer[ring->next_to_use].type = ONIC_TX_SKB;
 	q->buffer[ring->next_to_use].skb = skb;

@@ -76,6 +76,11 @@ static void onic_tx_clean(struct onic_tx_queue *q)
 
 	qdma_unpack_wb_stat(&wb, ring->wb);
 
+	if (wb.cidx != ring->next_to_clean)
+		netdev_info(q->netdev,
+			"PF TX wb: qid=%u sw_cidx=%u wb_pidx=%u wb_cidx=%u\n",
+			q->qid, ring->next_to_clean, wb.pidx, wb.cidx);
+
 	if (wb.cidx == ring->next_to_clean) {
 		clear_bit(0, q->state);
 		return;

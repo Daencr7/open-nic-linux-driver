@@ -86,22 +86,22 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 			return err;
 		}
 
-	{
-		u32 val;
-		int j;
+		{
+			// u32 val;
+			// int j;
 
-		val = FIELD_SET(QDMA_FUNC_QCONF_QBASE_MASK, fmap_ctxt.qbase) |
-			FIELD_SET(QDMA_FUNC_QCONF_NUMQ_MASK, fmap_ctxt.qmax);
+			// val = FIELD_SET(QDMA_FUNC_QCONF_QBASE_MASK, fmap_ctxt.qbase) |
+			// 	FIELD_SET(QDMA_FUNC_QCONF_NUMQ_MASK, fmap_ctxt.qmax);
 
-		onic_write_reg(&priv->hw, QDMA_FUNC_OFFSET_QCONF(vf_func_id), val);
+			// onic_write_reg(&priv->hw, QDMA_FUNC_OFFSET_QCONF(vf_func_id), val);
 
-		for (j = 0; j < 128; j++) {
-			val = (j % fmap_ctxt.qmax) & 0x0000ffff;
-			onic_write_reg(&priv->hw,
-					QDMA_FUNC_OFFSET_INDIR_TABLE(vf_func_id, j),
-					val);
+			// for (j = 0; j < 128; j++) {
+			// 	val = (j % fmap_ctxt.qmax) & 0x0000ffff;
+			// 	onic_write_reg(&priv->hw,
+			// 			QDMA_FUNC_OFFSET_INDIR_TABLE(vf_func_id, j),
+			// 			val);
+			// }
 		}
-	}
 
 		priv->vf_res[i].vf_id = i;
 		priv->vf_res[i].func_id = vf_func_id;
@@ -151,16 +151,17 @@ void onic_free_vf_resources(struct onic_private *priv, int num_vfs)
 		vf_qdev.func_id = priv->vf_res[i].func_id;
 
 
-		{
-			int j;
-			onic_write_reg(&priv->hw,
-					QDMA_FUNC_OFFSET_QCONF(priv->vf_res[i].func_id),
-					0);
-			for (j = 0; j < 128; j++)
-				onic_write_reg(&priv->hw,
-						QDMA_FUNC_OFFSET_INDIR_TABLE(priv->vf_res[i].func_id, j),
-						0);
-		}
+		// {
+		// 	int j;
+		// 	onic_write_reg(&priv->hw,
+		// 			QDMA_FUNC_OFFSET_QCONF(priv->vf_res[i].func_id),
+		// 			0);
+		// 	for (j = 0; j < 128; j++)
+		// 		onic_write_reg(&priv->hw,
+		// 				QDMA_FUNC_OFFSET_INDIR_TABLE(priv->vf_res[i].func_id, j),
+		// 				0);
+		// }
+
 		err = qdma_clear_fmap_ctxt(&vf_qdev);
 		if (err)
 			dev_warn(&priv->pdev->dev,
