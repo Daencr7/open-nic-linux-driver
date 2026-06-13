@@ -77,7 +77,7 @@ static void onic_tx_clean(struct onic_tx_queue *q)
 		return;
 
 	qdma_unpack_wb_stat(&wb, ring->wb);
-`
+
 	if (wb.cidx != ring->next_to_clean)
 		netdev_info(q->netdev,
 			"PF TX wb: qid=%u sw_cidx=%u wb_pidx=%u wb_cidx=%u\n",

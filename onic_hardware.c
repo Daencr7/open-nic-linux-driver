@@ -480,35 +480,37 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 	rv = qdma_clear_sw_ctxt(qdev, qid, dir);
 	if (rv < 0)
 		goto clear_rx_queue;
-	rv = qdma_write_sw_ctxt(qdev, qid, dir, &sw_ctxt);
-	if (rv < 0)
-		goto clear_rx_queue;
 
-	/* initialize hardware and credit context */
 	rv = qdma_clear_hw_ctxt(qdev, qid, dir);
 	if (rv < 0)
 		goto clear_rx_queue;
+
 	rv = qdma_clear_cr_ctxt(qdev, qid, dir);
 	if (rv < 0)
 		goto clear_rx_queue;
 
-	/* initialize prefetch and completion contexts */
+	rv = qdma_clear_pfch_ctxt(qdev, qid);
+	if (rv < 0)
+		goto clear_rx_queue;
+
+	rv = qdma_clear_cmpl_ctxt(qdev, qid);
+	if (rv < 0)
+		goto clear_rx_queue;
+
+	/* initialize prefetch context */
 	memset(&pfch_ctxt, 0, sizeof(struct qdma_pfch_ctxt));
 	pfch_ctxt.bufsz_idx = param->bufsz_idx;
 	pfch_ctxt.pfch_en = 1;
 	pfch_ctxt.valid = 1;
 
-	rv = qdma_clear_pfch_ctxt(qdev, qid);
-	if (rv < 0)
-		goto clear_rx_queue;
 	rv = qdma_write_pfch_ctxt(qdev, qid, &pfch_ctxt);
 	if (rv < 0)
 		goto clear_rx_queue;
 
+	/* initialize completion context */
 	memset(&cmpl_ctxt, 0, sizeof(struct qdma_cmpl_ctxt));
 	cmpl_ctxt.stat_en = 1;
-	//cmpl_ctxt.stat_en = 0;
-	cmpl_ctxt.intr_en = 1;
+	cmpl_ctxt.intr_en = 0;
 	cmpl_ctxt.trig_mode = 0x5;
 	cmpl_ctxt.func_id = qdev->func_id;
 	cmpl_ctxt.counter_idx = 0;
@@ -523,10 +525,14 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 	cmpl_ctxt.vec = param->vid;
 	cmpl_ctxt.intr_aggr = 0;
 
-	rv = qdma_clear_cmpl_ctxt(qdev, qid);
+	rv = qdma_write_cmpl_ctxt(qdev, qid, &cmpl_ctxt);
 	if (rv < 0)
 		goto clear_rx_queue;
-	rv = qdma_write_cmpl_ctxt(qdev, qid, &cmpl_ctxt);
+
+	/*
+	* Enable SW context last. qen=1 only after HW/CR/PFCH/CMPL are ready.
+	*/
+	rv = qdma_write_sw_ctxt(qdev, qid, dir, &sw_ctxt);
 	if (rv < 0)
 		goto clear_rx_queue;
 

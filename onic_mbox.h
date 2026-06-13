@@ -6,13 +6,16 @@
 #define ONIC_MBOX_MSG_SIZE             128
 #define ONIC_MBOX_MAX_PAYLOAD          112
 
-#define ONIC_MBOX_OP_GET_QUEUE_RES     0x01
-#define ONIC_MBOX_OP_QUEUE_RES_RESP    0x02
-
-#define ONIC_MBOX_OP_TX_QUEUE_INIT       0x03
-#define ONIC_MBOX_OP_TX_QUEUE_INIT_RESP  0x04
-#define ONIC_MBOX_OP_TX_QUEUE_CLEAR      0x05
-#define ONIC_MBOX_OP_TX_QUEUE_CLEAR_RESP 0x06
+#define ONIC_MBOX_OP_GET_QUEUE_RES     		0x01
+#define ONIC_MBOX_OP_QUEUE_RES_RESP    		0x02
+#define ONIC_MBOX_OP_TX_QUEUE_INIT       	0x03
+#define ONIC_MBOX_OP_TX_QUEUE_INIT_RESP  	0x04
+#define ONIC_MBOX_OP_TX_QUEUE_CLEAR      	0x05
+#define ONIC_MBOX_OP_TX_QUEUE_CLEAR_RESP 	0x06
+#define ONIC_MBOX_OP_RX_QUEUE_INIT       	0x07
+#define ONIC_MBOX_OP_RX_QUEUE_INIT_RESP  	0x08
+#define ONIC_MBOX_OP_RX_QUEUE_CLEAR      	0x09
+#define ONIC_MBOX_OP_RX_QUEUE_CLEAR_RESP 	0x0a
 
 #define ONIC_MBOX_STS_OK               0x00
 #define ONIC_MBOX_STS_ERR              0x01
@@ -48,6 +51,32 @@ struct onic_mbox_txq_resp {
 	u32 global_qid;
 	u32 rsvd;
 };
+
+struct onic_mbox_rxq_init {
+	u32 local_qid;
+	u32 desc_rngcnt_idx;
+	u32 cmpl_rngcnt_idx;
+	u32 bufsz_idx;
+	u32 vector;
+	u32 cmpl_desc_sz;
+	u32 rsvd0;
+	u32 rsvd1;
+	u64 desc_dma_addr;
+	u64 cmpl_dma_addr;
+};
+
+struct onic_mbox_rxq_clear {
+	u32 local_qid;
+	u32 rsvd;
+};
+
+struct onic_mbox_rxq_resp {
+	u32 func_id;
+	u32 local_qid;
+	u32 global_qid;
+	u32 rsvd;
+};
+	
 struct onic_mbox_msg {
 	struct onic_mbox_hdr hdr;
 
@@ -56,6 +85,9 @@ struct onic_mbox_msg {
 		struct onic_mbox_txq_init txq_init;
 		struct onic_mbox_txq_clear txq_clear;
 		struct onic_mbox_txq_resp txq_resp;
+		struct onic_mbox_rxq_init rxq_init;
+		struct onic_mbox_rxq_clear rxq_clear;
+		struct onic_mbox_rxq_resp rxq_resp;
 		u8 raw[ONIC_MBOX_MAX_PAYLOAD];
 	} data;
 };
