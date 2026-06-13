@@ -431,16 +431,16 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 	desc.metadata = skb->len;
 	qdma_pack_h2c_st_desc(desc_ptr, &desc);
 
-	// {
-	// 	u64 *dw = (u64 *)desc_ptr;
+	if (ring->next_to_use < 4) {
+		u64 *dw = (u64 *)desc_ptr;
 
-	// 	netdev_info(netdev,
-	// 			"VF TX desc: qid=%u idx=%u dw0=0x%016llx dw1=0x%016llx skb_dma=%pad len=%u ring_dma=%pad\n",
-	// 			qid, ring->next_to_use,
-	// 			(unsigned long long)dw[0],
-	// 			(unsigned long long)dw[1],
-	// 			&dma_addr, skb->len, &ring->dma_addr);
-	// }
+		netdev_info(netdev,
+				"VF TX desc: qid=%u global_qid=%u idx=%u dw0=0x%016llx dw1=0x%016llx skb_dma=%pad len=%u ring_dma=%pad\n",
+				qid, onic_vf_global_qid(priv, qid), ring->next_to_use,
+				(unsigned long long)dw[0],
+				(unsigned long long)dw[1],
+				&dma_addr, skb->len, &ring->dma_addr);
+	}
 
 	q->buffer[ring->next_to_use].type = ONIC_TX_SKB;
 	q->buffer[ring->next_to_use].skb = skb;
@@ -453,27 +453,27 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 	onic_vf_ring_increment_head(ring);
 
 	if (onic_vf_ring_full(ring) || !netdev_xmit_more()) {
-		wmb();
+		dma_wmb();
 		onic_vf_set_tx_head(priv, qid, ring->next_to_use);
 		// onic_vf_set_tx_head(priv, onic_vf_global_qid(priv, qid),
 		    // ring->next_to_use);
 		
-		if ((netdev->stats.tx_packets & 0x7) == 0) {
-			struct qdma_wb_stat wb;
+		// if ((netdev->stats.tx_packets & 0x7) == 0) {
+		// 	struct qdma_wb_stat wb;
 
-			memset(&wb, 0, sizeof(wb));
-			if (ring->wb)
-				qdma_unpack_wb_stat(&wb, ring->wb);
+		// 	memset(&wb, 0, sizeof(wb));
+		// 	if (ring->wb)
+		// 		qdma_unpack_wb_stat(&wb, ring->wb);
 
-			netdev_info(netdev,
-					"VF TX debug: qid=%u pidx=%u sw_cidx=%u wb_cidx=%u len=%u\n",
-					qid, ring->next_to_use, ring->next_to_clean,
-					wb.cidx, skb->len);
-			// netdev_info(netdev,
-			// 	"VF TX debug: qid=%u global_qid=%u pidx=%u sw_cidx=%u wb_cidx=%u len=%u\n",
-			// 	qid, onic_vf_global_qid(priv, qid), ring->next_to_use,
-			// 	ring->next_to_clean, wb.cidx, skb->len);
-		}
+		// 	netdev_info(netdev,
+		// 			"VF TX debug: qid=%u pidx=%u sw_cidx=%u wb_cidx=%u len=%u\n",
+		// 			qid, ring->next_to_use, ring->next_to_clean,
+		// 			wb.cidx, skb->len);
+		// 	// netdev_info(netdev,
+		// 	// 	"VF TX debug: qid=%u global_qid=%u pidx=%u sw_cidx=%u wb_cidx=%u len=%u\n",
+		// 	// 	qid, onic_vf_global_qid(priv, qid), ring->next_to_use,
+		// 	// 	ring->next_to_clean, wb.cidx, skb->len);
+		// }
 	}
 
 	return NETDEV_TX_OK;

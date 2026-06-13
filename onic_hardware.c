@@ -405,7 +405,8 @@ int onic_qdma_init_tx_queue(unsigned long qdma, u16 qid,
 	sw_ctxt.irq_arm = 0;
 	sw_ctxt.irq_en = 0;
 	sw_ctxt.desc_sz = 1; /* 1: 16B for H2C stream */
-	sw_ctxt.fcrd_en = 0;
+	sw_ctxt.fcrd_en = 0; /* enable fetch credit for better performance last = 0 */
+	sw_ctxt.fetch_max = 1; // add debug
 	sw_ctxt.wbi_chk = 1;
 	sw_ctxt.wbi_intvl_en = 1;
 	sw_ctxt.at = 0;
@@ -414,18 +415,34 @@ int onic_qdma_init_tx_queue(unsigned long qdma, u16 qid,
 	sw_ctxt.vec = param->vid;
 	sw_ctxt.intr_aggr = 0;
 
+	// rv = qdma_clear_sw_ctxt(qdev, qid, dir);
+	// if (rv < 0)
+	// 	goto clear_tx_queue;
+	// rv = qdma_write_sw_ctxt(qdev, qid, dir, &sw_ctxt);
+	// if (rv < 0)
+	// 	goto clear_tx_queue;
+
+	// /* initialize hardware and credit context */
+	// rv = qdma_clear_hw_ctxt(qdev, qid, dir);
+	// if (rv < 0)
+	// 	goto clear_tx_queue;
+	// rv = qdma_clear_cr_ctxt(qdev, qid, dir);
+	// if (rv < 0)
+	// 	goto clear_tx_queue;
+
 	rv = qdma_clear_sw_ctxt(qdev, qid, dir);
 	if (rv < 0)
 		goto clear_tx_queue;
-	rv = qdma_write_sw_ctxt(qdev, qid, dir, &sw_ctxt);
-	if (rv < 0)
-		goto clear_tx_queue;
 
-	/* initialize hardware and credit context */
 	rv = qdma_clear_hw_ctxt(qdev, qid, dir);
 	if (rv < 0)
 		goto clear_tx_queue;
+
 	rv = qdma_clear_cr_ctxt(qdev, qid, dir);
+	if (rv < 0)
+		goto clear_tx_queue;
+
+	rv = qdma_write_sw_ctxt(qdev, qid, dir, &sw_ctxt);
 	if (rv < 0)
 		goto clear_tx_queue;
 

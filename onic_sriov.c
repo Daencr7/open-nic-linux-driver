@@ -11,6 +11,24 @@
 #include "onic_register.h"
 #include "onic_common.h"
 
+static void onic_update_shell_queue_range(struct onic_private *priv,
+					  u16 qbase, u16 qmax)
+{
+	u32 val;
+
+	val = FIELD_SET(QDMA_FUNC_QCONF_QBASE_MASK, qbase) |
+	      FIELD_SET(QDMA_FUNC_QCONF_NUMQ_MASK, qmax);
+
+	/*
+	 * Current OpenNIC shell only exposes func0 QCONF safely.
+	 * Do not write QCONF for VF func_id 4..7 here.
+	 */
+	onic_write_reg(&priv->hw, QDMA_FUNC_OFFSET_QCONF(0), val);
+
+	dev_info(&priv->pdev->dev,
+		 "Shell queue range updated: qbase=%u qmax=%u\n",
+		 qbase, qmax);
+}
 
 int onic_sriov_configure(struct pci_dev *pdev, int num_vfs)
 {
@@ -123,6 +141,19 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		current_base_queue += ONIC_VF_MAX_QUEUES;
 		
 	}
+	// if (current_base_queue > ONIC_MAX_QUEUES) {
+	// 	dev_err(&priv->pdev->dev,
+	// 		"Not enough queues: need=%u max=%u\n",
+	// 		current_base_queue, ONIC_MAX_QUEUES);
+	// 	onic_free_vf_resources(priv, num_vfs);
+	// 	return -EINVAL;
+	// }
+	{
+		u16 shell_qbase = pf_qdev->q_base;
+		u16 shell_qmax = current_base_queue - shell_qbase;
+
+		onic_update_shell_queue_range(priv, shell_qbase, shell_qmax);
+	}
 	priv->num_vfs = num_vfs;
 
     return 0;
@@ -170,6 +201,6 @@ void onic_free_vf_resources(struct onic_private *priv, int num_vfs)
 
 		memset(&priv->vf_res[i], 0, sizeof(priv->vf_res[i]));
 	}
-
+	onic_update_shell_queue_range(priv, pf_qdev->q_base, pf_qdev->num_queues);
 	priv->num_vfs = 0;
 }
