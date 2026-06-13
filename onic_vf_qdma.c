@@ -35,6 +35,7 @@ static inline u16 onic_vf_global_qid(struct onic_private *priv, u16 local_qid)
 #include <linux/errno.h>
 #include <linux/slab.h>
 #include <linux/version.h>
+#include <linux/interrupt.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include <net/page_pool/helpers.h>
 #include <net/page_pool/types.h>
@@ -591,22 +592,37 @@ advance:
 		work++;
 	}
 
-	if (work) {
-		if (onic_vf_rx_high_watermark(q))
-			onic_vf_rx_refill(priv, q);
+	if (work && onic_vf_rx_high_watermark(q))
+		onic_vf_rx_refill(priv, q);
 
-		dma_wmb();
+	dma_wmb();
+
+	if (work < budget) {
+		if (napi_complete_done(napi, work))
+			onic_vf_set_completion_tail(priv, q->qid,
+						    cmpl_ring->next_to_clean, 1);
+	} else {
 		onic_vf_set_completion_tail(priv, q->qid,
 					    cmpl_ring->next_to_clean, 0);
 	}
 
-	if (work < budget)
-		napi_complete_done(napi, work);
-
 	return work;
 }
 
-static void onic_vf_schedule_rx_poll(struct onic_private *priv)
+static irqreturn_t onic_vf_rx_irq_handler(int irq, void *data)
+{
+	struct onic_rx_queue *q = data;
+
+	if (!q || !q->netdev)
+		return IRQ_NONE;
+
+	if (napi_schedule_prep(&q->napi))
+		__napi_schedule(&q->napi);
+
+	return IRQ_HANDLED;
+}
+
+static void __maybe_unused onic_vf_schedule_rx_poll(struct onic_private *priv)
 {
 	int i;
 
@@ -717,7 +733,38 @@ static int onic_vf_init_rx_ring(struct onic_private *priv, u16 qid)
 	ring->color = 1;
 
 	// vid = priv->num_q_vectors ? 1 + (qid % priv->num_q_vectors) : 0;
-	vid = 0;
+	// vid = 0;
+
+	if (!priv->num_q_vectors) {
+		rv = -ENOSPC;
+		goto err_free_cmpl;
+	}
+
+	vid = 1 + (qid % priv->num_q_vectors);
+	q->vector_index = vid;
+	q->irq = pci_irq_vector(priv->pdev, vid);
+	if (q->irq < 0) {
+		rv = q->irq;
+		goto err_free_cmpl;
+	}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	netif_napi_add(priv->netdev, &q->napi, onic_vf_rx_poll);
+#else
+	netif_napi_add(priv->netdev, &q->napi, onic_vf_rx_poll, 64);
+#endif
+	napi_enable(&q->napi);
+
+	rv = request_irq(q->irq, onic_vf_rx_irq_handler, 0,
+			 "onic-vf-rx", q);
+	if (rv)
+		goto err_disable_napi;
+
+	q->irq_allocated = true;
+
+	dev_info(&priv->pdev->dev,
+		 "VF RX IRQ requested: local_qid=%u vector_index=%u linux_irq=%d\n",
+		 qid, q->vector_index, q->irq);
 
 	rv = onic_vf_mbox_init_rx_queue(priv, qid,
 					q->desc_ring.dma_addr,
@@ -728,31 +775,27 @@ static int onic_vf_init_rx_ring(struct onic_private *priv, u16 qid)
 					cmpl_desc_sz,
 					vid);
 	if (rv)
-		goto err_free_cmpl;
+		goto err_free_irq;
 
 	q->desc_ring.next_to_use = min_t(u16, ONIC_VF_RX_DESC_STEP,
 					 onic_vf_ring_real_count(&q->desc_ring));
 
 	dma_wmb();
 	onic_vf_set_rx_head(priv, qid, q->desc_ring.next_to_use);
-	onic_vf_set_completion_tail(priv, qid, 0, 0);
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
-	netif_napi_add(priv->netdev, &q->napi, onic_vf_rx_poll);
-#else
-	netif_napi_add(priv->netdev, &q->napi, onic_vf_rx_poll, 64);
-#endif
-	napi_enable(&q->napi);
+	onic_vf_set_completion_tail(priv, qid, 0, 1);
 
 	priv->rx_queue[qid] = q;
 
-	netdev_info(priv->netdev,
-		    "VF RX ring init: local_qid=%u global_qid=%u vid=%u desc_count=%u cmpl_count=%u desc_dma=%pad cmpl_dma=%pad\n",
-		    qid, onic_vf_global_qid(priv, qid), vid,
-		    q->desc_ring.count, q->cmpl_ring.count,
-		    &q->desc_ring.dma_addr, &q->cmpl_ring.dma_addr);
-
 	return 0;
+err_free_irq:
+	if (q->irq_allocated) {
+		free_irq(q->irq, q);
+		q->irq_allocated = false;
+	}
+
+err_disable_napi:
+	napi_disable(&q->napi);
+	netif_napi_del(&q->napi);
 
 err_free_cmpl:
 	size = QDMA_C2H_CMPL_SIZE * (q->cmpl_ring.count - 1) +
@@ -805,6 +848,12 @@ static void onic_vf_clear_rx_ring(struct onic_private *priv, u16 qid)
 		return;
 
 	napi_disable(&q->napi);
+
+	if (q->irq_allocated) {
+		free_irq(q->irq, q);
+		q->irq_allocated = false;
+	}
+
 	netif_napi_del(&q->napi);
 
 	if (priv->vf_hw.resource_valid) {
@@ -971,7 +1020,7 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 		onic_vf_set_tx_head(priv, qid, ring->next_to_use);
 		// onic_vf_set_tx_head(priv, onic_vf_global_qid(priv, qid),
 		    // ring->next_to_use);
-		onic_vf_schedule_rx_poll(priv);
+		// onic_vf_schedule_rx_poll(priv);
 		
 		// if ((netdev->stats.tx_packets & 0x7) == 0) {
 		// 	struct qdma_wb_stat wb;

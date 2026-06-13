@@ -111,6 +111,9 @@ struct onic_rx_queue {
 	struct onic_ring desc_ring;
 	struct onic_ring cmpl_ring;
 	struct onic_q_vector *vector;
+	u16 vector_index;
+	int irq;
+	bool irq_allocated;
 
 	struct napi_struct napi;
 	struct bpf_prog *xdp_prog;

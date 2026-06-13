@@ -510,7 +510,7 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 	/* initialize completion context */
 	memset(&cmpl_ctxt, 0, sizeof(struct qdma_cmpl_ctxt));
 	cmpl_ctxt.stat_en = 1;
-	cmpl_ctxt.intr_en = 0;
+	cmpl_ctxt.intr_en = 1;
 	cmpl_ctxt.trig_mode = 0x5;
 	cmpl_ctxt.func_id = qdev->func_id;
 	cmpl_ctxt.counter_idx = 0;
