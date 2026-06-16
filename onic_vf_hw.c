@@ -40,8 +40,8 @@ int onic_vf_map_bars(struct onic_private *priv)
 	priv->vf_hw.bar0_len = pci_resource_len(pdev, ONIC_VF_QDMA_BAR);
 	priv->vf_hw.bar2_len = pci_resource_len(pdev, ONIC_VF_SHELL_BAR);
 
-	dev_info(&pdev->dev, "VF BAR0 len=%pa\n", &priv->vf_hw.bar0_len);
-	dev_info(&pdev->dev, "VF BAR2 len=%pa\n", &priv->vf_hw.bar2_len);
+	// dev_info(&pdev->dev, "VF BAR0 len=%pa\n", &priv->vf_hw.bar0_len);
+	// dev_info(&pdev->dev, "VF BAR2 len=%pa\n", &priv->vf_hw.bar2_len);
 
 	if (!priv->vf_hw.bar0_len) {
 		dev_err(&pdev->dev, "VF BAR0 not available\n");
@@ -73,10 +73,10 @@ int onic_vf_map_bars(struct onic_private *priv)
 	// if (priv->vf_hw.bar2)
 	// 	priv->vf_hw.shell_hw.addr = priv->vf_hw.bar2;
 
-	dev_info(&pdev->dev, "VF BAR0 mapped addr=%p len=%pa\n",
-		 priv->vf_hw.bar0, &priv->vf_hw.bar0_len);
-	dev_info(&pdev->dev, "VF BAR2 mapped addr=%p len=%pa\n",
-		 priv->vf_hw.bar2, &priv->vf_hw.bar2_len);
+	// dev_info(&pdev->dev, "VF BAR0 mapped addr=%p len=%pa\n",
+	// 	 priv->vf_hw.bar0, &priv->vf_hw.bar0_len);
+	// dev_info(&pdev->dev, "VF BAR2 mapped addr=%p len=%pa\n",
+	// 	 priv->vf_hw.bar2, &priv->vf_hw.bar2_len);
 
 	return 0;
 }

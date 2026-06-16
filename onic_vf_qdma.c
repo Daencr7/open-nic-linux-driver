@@ -25,12 +25,7 @@ local queue 0 → global queue 4
 local queue 1 → global queue 5
 local queue 2 → global queue 6
 local queue 3 → global queue 7
-Trong code VF nên có helper:
-static inline u16 onic_vf_global_qid(struct onic_private *priv, u16 local_qid)
-{
-	return priv->qbase + local_qid;
-}
- */
+*/
 
 #include <linux/errno.h>
 #include <linux/slab.h>
@@ -87,9 +82,9 @@ static void onic_vf_set_tx_head(struct onic_private *priv, u16 qid, u16 head)
 	onic_vf_write_bar0(priv, offset, val);
 	rb = onic_vf_read_bar0(priv, offset);
 
-	dev_info(&priv->pdev->dev,
-		 "VF TX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
-		 qid, offset, head, val, rb);
+	// dev_info(&priv->pdev->dev,
+	// 	 "VF TX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
+	// 	 qid, offset, head, val, rb);
 }
 
 static void onic_vf_set_rx_head(struct onic_private *priv, u16 qid, u16 head)
@@ -101,9 +96,9 @@ static void onic_vf_set_rx_head(struct onic_private *priv, u16 qid, u16 head)
 	onic_vf_write_bar0(priv, offset, val);
 	rb = onic_vf_read_bar0(priv, offset);
 
-	dev_info(&priv->pdev->dev,
-		 "VF RX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
-		 qid, offset, head, val, rb);
+	// dev_info(&priv->pdev->dev,
+	// 	 "VF RX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
+	// 	 qid, offset, head, val, rb);
 }
 
 static void onic_vf_set_completion_tail(struct onic_private *priv, u16 qid,
@@ -123,9 +118,9 @@ static void onic_vf_set_completion_tail(struct onic_private *priv, u16 qid,
 	onic_vf_write_bar0(priv, offset, val);
 	rb = onic_vf_read_bar0(priv, offset);
 
-	dev_info(&priv->pdev->dev,
-		 "VF CMPL cidx write: qid=%u offset=0x%x cidx=%u val=0x%08x rb=0x%08x\n",
-		 qid, offset, tail, val, rb);
+	// dev_info(&priv->pdev->dev,
+	// 	 "VF CMPL cidx write: qid=%u offset=0x%x cidx=%u val=0x%08x rb=0x%08x\n",
+	// 	 qid, offset, tail, val, rb);
 }
 
 static inline u16 onic_vf_ring_real_count(struct onic_ring *ring)
@@ -576,11 +571,11 @@ static int onic_vf_rx_poll(struct napi_struct *napi, int budget)
 		q->netdev->stats.rx_packets++;
 		q->netdev->stats.rx_bytes += len;
 
-		if ((q->netdev->stats.rx_packets & 0xf) == 1)
-			netdev_info(q->netdev,
-				    "VF RX packet: qid=%u desc_idx=%u cmpl_idx=%u pkt_id=%u len=%u color=%u\n",
-				    q->qid, desc_idx, cmpl_ring->next_to_clean,
-				    cmpl.pkt_id, len, cmpl.color);
+		// if ((q->netdev->stats.rx_packets & 0xf) == 1)
+		// 	netdev_info(q->netdev,
+		// 		    "VF RX packet: qid=%u desc_idx=%u cmpl_idx=%u pkt_id=%u len=%u color=%u\n",
+		// 		    q->qid, desc_idx, cmpl_ring->next_to_clean,
+		// 		    cmpl.pkt_id, len, cmpl.color);
 
 advance:
 		onic_vf_ring_increment_tail(desc_ring);
@@ -994,16 +989,16 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 	desc.metadata = skb->len;
 	qdma_pack_h2c_st_desc(desc_ptr, &desc);
 
-	if (ring->next_to_use < 4) {
-		u64 *dw = (u64 *)desc_ptr;
+	// if (ring->next_to_use < 4) {
+	// 	u64 *dw = (u64 *)desc_ptr;
 
-		netdev_info(netdev,
-				"VF TX desc: qid=%u global_qid=%u idx=%u dw0=0x%016llx dw1=0x%016llx skb_dma=%pad len=%u ring_dma=%pad\n",
-				qid, onic_vf_global_qid(priv, qid), ring->next_to_use,
-				(unsigned long long)dw[0],
-				(unsigned long long)dw[1],
-				&dma_addr, skb->len, &ring->dma_addr);
-	}
+		// netdev_info(netdev,
+		// 		"VF TX desc: qid=%u global_qid=%u idx=%u dw0=0x%016llx dw1=0x%016llx skb_dma=%pad len=%u ring_dma=%pad\n",
+		// 		qid, onic_vf_global_qid(priv, qid), ring->next_to_use,
+		// 		(unsigned long long)dw[0],
+		// 		(unsigned long long)dw[1],
+		// 		&dma_addr, skb->len, &ring->dma_addr);
+	// }
 
 	q->buffer[ring->next_to_use].type = ONIC_TX_SKB;
 	q->buffer[ring->next_to_use].skb = skb;
