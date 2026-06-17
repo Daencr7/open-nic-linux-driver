@@ -53,6 +53,9 @@ local queue 3 → global queue 7
 #define ONIC_VF_RX_BUFSZ_IDX        8
 #define ONIC_VF_RX_DESC_STEP 256
 
+#define ONIC_VF_CMPL_COUNTER_IDX 8   /* threshold 80 */
+#define ONIC_VF_CMPL_TIMER_IDX   10  /* timer 50 */
+#define ONIC_VF_CMPL_TRIG_MODE   5
 
 /* Helper function */
 static inline u16 onic_vf_global_qid(struct onic_private *priv, u16 local_qid)
@@ -74,13 +77,13 @@ static void onic_vf_set_tx_head(struct onic_private *priv, u16 qid, u16 head)
 {
 	u32 offset;
 	u32 val;
-	u32 rb;
+	// u32 rb;
 
 	offset = QDMA_OFFSET_VF_DMAP_SEL_H2C_DESC_PIDX + qid * 16;
 	val = FIELD_SET(QDMA_DMAP_SEL_DESC_PIDX_MASK, head);
 
 	onic_vf_write_bar0(priv, offset, val);
-	rb = onic_vf_read_bar0(priv, offset);
+	// rb = onic_vf_read_bar0(priv, offset);
 
 	// dev_info(&priv->pdev->dev,
 	// 	 "VF TX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
@@ -91,10 +94,10 @@ static void onic_vf_set_rx_head(struct onic_private *priv, u16 qid, u16 head)
 {
 	u32 offset = QDMA_OFFSET_VF_DMAP_SEL_C2H_DESC_PIDX + qid * 16;
 	u32 val = FIELD_SET(QDMA_DMAP_SEL_DESC_PIDX_MASK, head);
-	u32 rb;
+	// u32 rb;
 
 	onic_vf_write_bar0(priv, offset, val);
-	rb = onic_vf_read_bar0(priv, offset);
+	// rb = onic_vf_read_bar0(priv, offset);
 
 	// dev_info(&priv->pdev->dev,
 	// 	 "VF RX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
@@ -106,17 +109,17 @@ static void onic_vf_set_completion_tail(struct onic_private *priv, u16 qid,
 {
 	u32 offset = QDMA_OFFSET_VF_DMAP_SEL_CMPL_CIDX + qid * 16;
 	u32 val;
-	u32 rb;
+	// u32 rb;
 
-	val = FIELD_SET(QDMA_DMAP_SEL_CMPL_CIDX_MASK, tail) |
-	      FIELD_SET(QDMA_DMAP_SEL_CMPL_COUNTER_IDX_MASK, 0) |
-	      FIELD_SET(QDMA_DMAP_SEL_CMPL_TIMER_IDX_MASK, 0) |
-	      FIELD_SET(QDMA_DMAP_SEL_CMPL_TRIG_MODE_MASK, 5) |
-	      FIELD_SET(QDMA_DMAP_SEL_CMPL_STAT_EN_MASK, 1) |
-	      FIELD_SET(QDMA_DMAP_SEL_CMPL_IRQ_ARM_MASK, irq_arm);
+	val = 	FIELD_SET(QDMA_DMAP_SEL_CMPL_CIDX_MASK, tail) |
+			FIELD_SET(QDMA_DMAP_SEL_CMPL_COUNTER_IDX_MASK, ONIC_VF_CMPL_COUNTER_IDX) |
+			FIELD_SET(QDMA_DMAP_SEL_CMPL_TIMER_IDX_MASK, ONIC_VF_CMPL_TIMER_IDX) |
+			FIELD_SET(QDMA_DMAP_SEL_CMPL_TRIG_MODE_MASK, ONIC_VF_CMPL_TRIG_MODE) |
+			FIELD_SET(QDMA_DMAP_SEL_CMPL_STAT_EN_MASK, 1) |
+			FIELD_SET(QDMA_DMAP_SEL_CMPL_IRQ_ARM_MASK, irq_arm);
 
 	onic_vf_write_bar0(priv, offset, val);
-	rb = onic_vf_read_bar0(priv, offset);
+	// rb = onic_vf_read_bar0(priv, offset);
 
 	// dev_info(&priv->pdev->dev,
 	// 	 "VF CMPL cidx write: qid=%u offset=0x%x cidx=%u val=0x%08x rb=0x%08x\n",
@@ -772,8 +775,9 @@ static int onic_vf_init_rx_ring(struct onic_private *priv, u16 qid)
 	if (rv)
 		goto err_free_irq;
 
-	q->desc_ring.next_to_use = min_t(u16, ONIC_VF_RX_DESC_STEP,
-					 onic_vf_ring_real_count(&q->desc_ring));
+	// q->desc_ring.next_to_use = min_t(u16, ONIC_VF_RX_DESC_STEP,
+	// 				 onic_vf_ring_real_count(&q->desc_ring));
+	q->desc_ring.next_to_use = onic_vf_ring_real_count(&q->desc_ring);
 
 	dma_wmb();
 	onic_vf_set_rx_head(priv, qid, q->desc_ring.next_to_use);
@@ -962,10 +966,17 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 
 	ring = &q->ring;
 
-	onic_vf_tx_clean(q);
+	// onic_vf_tx_clean(q);
 
-	if (onic_vf_ring_full(ring))
-		return NETDEV_TX_BUSY;
+	// if (onic_vf_ring_full(ring))
+	// 	return NETDEV_TX_BUSY;
+	if (unlikely(onic_vf_ring_full(ring))) {
+		onic_vf_tx_clean(q);
+		if (onic_vf_ring_full(ring))
+			return NETDEV_TX_BUSY;
+	} else if ((ring->next_to_use & 0x3f) == 0) {
+		onic_vf_tx_clean(q);
+	}
 
 	err = skb_put_padto(skb, ETH_ZLEN);
 	if (err) {

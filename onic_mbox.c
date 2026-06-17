@@ -516,9 +516,9 @@ static int onic_pf_mbox_drop_stale_requests(struct onic_private *priv)
 		qdma_write_reg(qdev, QDMA_PF_MBOX_TARGET_FN, src_func_id);
 		qdma_write_reg(qdev, QDMA_PF_MBOX_CMD, QDMA_MBOX_CMD_RCV);
 
-		dev_warn(&priv->pdev->dev,
-			 "Dropped stale PF mailbox request from func_id=%u\n",
-			 src_func_id);
+		// dev_warn(&priv->pdev->dev,
+		// 	 "Dropped stale PF mailbox request from func_id=%u\n",
+		// 	 src_func_id);
 	}
 
 	return -EIO;

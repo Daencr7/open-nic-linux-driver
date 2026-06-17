@@ -513,8 +513,8 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 	cmpl_ctxt.intr_en = 1;
 	cmpl_ctxt.trig_mode = 0x5;
 	cmpl_ctxt.func_id = qdev->func_id;
-	cmpl_ctxt.counter_idx = 0;
-	cmpl_ctxt.timer_idx = 0;
+	cmpl_ctxt.counter_idx = 8;
+	cmpl_ctxt.timer_idx = 10;
 	cmpl_ctxt.color = 1;
 	cmpl_ctxt.rngsz_idx = param->cmpl_rngcnt_idx;
 	cmpl_ctxt.baddr = param->cmpl_dma_addr;
