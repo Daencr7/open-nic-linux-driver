@@ -11,6 +11,15 @@
 #include "onic_register.h"
 #include "onic_common.h"
 
+static void onic_clear_mac_table_entry(struct onic_private *priv, u32 entry)
+{
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_SET_ADDR, entry);
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_SET_CLR,
+		       ONIC_MAC_TABLE_CLEAR);
+	wmb();
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_VLD, 0x1);
+}
+
 static void onic_update_shell_queue_range(struct onic_private *priv,
 					  u16 qbase, u16 qmax)
 {
@@ -127,7 +136,15 @@ int onic_config_vf_resources(struct onic_private *priv, int num_vfs)
 		priv->vf_res[i].qmax = ONIC_VF_MAX_QUEUES;
 		priv->vf_res[i].num_tx_queues = ONIC_VF_MAX_QUEUES;
 		priv->vf_res[i].num_rx_queues = ONIC_VF_MAX_QUEUES;
-		eth_random_addr(priv->vf_res[i].mac);
+		// eth_random_addr(priv->vf_res[i].mac);
+		
+		priv->vf_res[i].mac[0] = 0x02;
+		priv->vf_res[i].mac[1] = 0x0a;
+		priv->vf_res[i].mac[2] = 0x35;
+		priv->vf_res[i].mac[3] = 0x00;
+		priv->vf_res[i].mac[4] = 0x00;
+		priv->vf_res[i].mac[5] = vf_func_id;
+
 		priv->vf_res[i].enabled = true;
 		dev_info(&priv->pdev->dev,
 				"VF%d resource: func_id=%u qbase=%u qmax=%u txq=%u rxq=%u mac=%pM\n",
@@ -192,7 +209,12 @@ void onic_free_vf_resources(struct onic_private *priv, int num_vfs)
 		// 				QDMA_FUNC_OFFSET_INDIR_TABLE(priv->vf_res[i].func_id, j),
 		// 				0);
 		// }
+		onic_clear_mac_table_entry(priv, 1 + priv->vf_res[i].vf_id);
 
+		dev_info(&priv->pdev->dev,
+			"VF%d MAC table entry cleared: entry=%u mac=%pM\n",
+			i, 1 + priv->vf_res[i].vf_id, priv->vf_res[i].mac);
+			
 		err = qdma_clear_fmap_ctxt(&vf_qdev);
 		if (err)
 			dev_warn(&priv->pdev->dev,

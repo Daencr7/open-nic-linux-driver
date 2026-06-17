@@ -105,32 +105,32 @@ MODULE_DEVICE_TABLE(pci, onic_vf_pci_tbl);
  * Default MAC address for 4 VFs
  * This task will dev in the future when max VFS > 4
  */
-static const u8 onic_vf_default_macs[4][ETH_ALEN] = {
-	{ 0x02, 0x0A, 0x35, 0x00, 0x00, 0x04 },
-	{ 0x02, 0x0A, 0x35, 0x00, 0x00, 0x05 },
-	{ 0x02, 0x0A, 0x35, 0x00, 0x00, 0x06 },
-	{ 0x02, 0x0A, 0x35, 0x00, 0x00, 0x07 },
-};
+// static const u8 onic_vf_default_macs[4][ETH_ALEN] = {
+// 	{ 0x02, 0x0A, 0x35, 0x00, 0x00, 0x04 },
+// 	{ 0x02, 0x0A, 0x35, 0x00, 0x00, 0x05 },
+// 	{ 0x02, 0x0A, 0x35, 0x00, 0x00, 0x06 },
+// 	{ 0x02, 0x0A, 0x35, 0x00, 0x00, 0x07 },
+// };
 
-static int onic_vf_set_default_mac(struct onic_private *priv)
-{
-	struct net_device *netdev = priv->netdev;
-	u16 func_id = priv->vf_hw.func_id;
-	u16 vf_idx;
+// static int onic_vf_set_default_mac_network_interface(struct onic_private *priv)
+// {
+// 	struct net_device *netdev = priv->netdev;
+// 	u16 func_id = priv->vf_hw.func_id;
+// 	u16 vf_idx;
 
-	if (func_id < 4 || func_id >= 8)
-		return -EINVAL;
+// 	if (func_id < 4 || func_id >= 8)
+// 		return -EINVAL;
 
-	vf_idx = func_id - 4;
+// 	vf_idx = func_id - 4;
 
-	eth_hw_addr_set(netdev, onic_vf_default_macs[vf_idx]);
+// 	eth_hw_addr_set(netdev, onic_vf_default_macs[vf_idx]);
 
-	dev_info(&priv->pdev->dev,
-		 "VF default MAC assigned: func_id=%u vf_idx=%u mac=%pM\n",
-		 func_id, vf_idx, netdev->dev_addr);
+// 	dev_info(&priv->pdev->dev,
+// 		 "VF default MAC assigned: func_id=%u vf_idx=%u mac=%pM\n",
+// 		 func_id, vf_idx, netdev->dev_addr);
 
-	return 0;
-}
+// 	return 0;
+// }
 
 static const struct net_device_ops onic_vf_netdev_ops = {
 	.ndo_open = onic_vf_open_netdev,
@@ -290,6 +290,20 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	 priv->vf_hw.qbase,
 	 priv->vf_hw.qbase + priv->vf_hw.qmax - 1);
 	 
+	err = onic_vf_mbox_program_mac_table(priv);
+	if (err) {
+		dev_err(&pdev->dev,
+			"Failed to program VF MAC table: %d\n", err);
+		goto err_clear_mbox_irq;
+	}
+
+	eth_hw_addr_set(netdev, priv->vf_hw.mac);
+
+	dev_info(&pdev->dev,
+		"VF MAC assigned: func_id=%u mac=%pM\n",
+		priv->vf_hw.func_id, netdev->dev_addr);
+
+
 	err = onic_vf_qdma_init(priv);
 	if (err) {
 		dev_err(&pdev->dev, "Failed to initialize VF QDMA state: %d\n", err);
@@ -330,13 +344,13 @@ static int onic_vf_probe(struct pci_dev *pdev,
 	 * Need to fix when using mailbox to get MAC from PF if want change
 	 */
 	// eth_hw_addr_random(netdev); 
-	err = onic_vf_set_default_mac(priv);
-	if (err) {
-		dev_err(&pdev->dev,
-			"Failed to assign default VF MAC: func_id=%u err=%d\n",
-			priv->vf_hw.func_id, err);
-		goto err_clear_vf_qdma;
-	}
+	// err = onic_vf_set_default_mac_network_interface(priv);
+	// if (err) {
+	// 	dev_err(&pdev->dev,
+	// 		"Failed to assign default VF MAC: func_id=%u err=%d\n",
+	// 		priv->vf_hw.func_id, err);
+	// 	goto err_clear_vf_qdma;
+	// }
 
 
 	/* set MTU */
@@ -399,7 +413,7 @@ static void onic_vf_remove(struct pci_dev *pdev)
 {
 	struct onic_private *priv = pci_get_drvdata(pdev);
 	struct net_device *netdev = NULL;
-
+	int err;
 	dev_info(&pdev->dev, "OpenNIC VF remove\n");
 
 	if (priv)
@@ -410,6 +424,12 @@ static void onic_vf_remove(struct pci_dev *pdev)
 
 	if (priv) {
 		onic_vf_qdma_clear(priv);
+		if (priv->vf_hw.resource_valid) {
+			err = onic_vf_mbox_clear_mac_table(priv);
+			if (err)
+				dev_warn(&pdev->dev,
+					"Failed to clear VF MAC table: %d\n", err);
+		}
 		onic_vf_mbox_irq_clear(priv);
 		priv->num_q_vectors = 0;
 		// {
@@ -431,26 +451,6 @@ static void onic_vf_remove(struct pci_dev *pdev)
 	pci_disable_device(pdev);
 }
 
-// static void onic_vf_remove(struct pci_dev *pdev)
-// {
-// 	struct onic_private *priv = pci_get_drvdata(pdev);
-// 	struct net_device *netdev = NULL;
-
-// 	dev_info(&pdev->dev, "OpenNIC VF remove\n");
-
-// 	if (priv)
-// 		netdev = priv->netdev;
-
-// 	pci_set_drvdata(pdev, NULL);
-
-// 	if (netdev) {
-// 		unregister_netdev(netdev);
-// 		free_netdev(netdev);
-// 	}
-
-// 	pci_release_mem_regions(pdev);
-// 	pci_disable_device(pdev);
-// }
 
 static struct pci_driver onic_vf_pci_driver = {
     .name = onic_drv_name,

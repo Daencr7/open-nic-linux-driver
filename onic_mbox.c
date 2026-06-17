@@ -4,12 +4,13 @@
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/bitops.h>
+#include <linux/etherdevice.h>
 #include "onic.h"
 #include "onic_mbox.h"
 #include "qdma_device.h"
 #include "qdma_register.h"
 #include "qdma_context.h"
-
+#include "onic_register.h"
 
 
 static void onic_pf_mbox_write_msg(struct qdma_dev *qdev, u32 offset,
@@ -51,6 +52,16 @@ onic_pf_mbox_find_vf_resource(struct onic_private *priv, u16 func_id)
 
 	return NULL;
 }
+
+static int onic_pf_mbox_program_mac_table(struct onic_private *priv,
+					  u16 src_func_id,
+					  const struct onic_mbox_msg *req,
+					  struct onic_mbox_msg *resp);
+
+static int onic_pf_mbox_clear_mac_table(struct onic_private *priv,
+					u16 src_func_id,
+					const struct onic_mbox_msg *req,
+					struct onic_mbox_msg *resp);
 
 static int onic_pf_mbox_init_tx_queue(struct onic_private *priv,
 				      u16 src_func_id,
@@ -410,6 +421,12 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 		case ONIC_MBOX_OP_RX_QUEUE_CLEAR:
 			err = onic_pf_mbox_clear_rx_queue(priv, src_func_id, &req, &resp);
 			break;
+		case ONIC_MBOX_OP_PROGRAM_MAC_TABLE:
+			err = onic_pf_mbox_program_mac_table(priv, src_func_id, &req, &resp);
+			break;
+		case ONIC_MBOX_OP_CLEAR_MAC_TABLE:
+			err = onic_pf_mbox_clear_mac_table(priv, src_func_id, &req, &resp);
+			break;
 		default:
 			err = -EOPNOTSUPP;
 			break;
@@ -461,6 +478,22 @@ int onic_pf_mbox_process_one(struct onic_private *priv)
 			resp.data.rxq_resp.func_id,
 			resp.data.rxq_resp.local_qid,
 			resp.data.rxq_resp.global_qid);
+	} else if (req.hdr.opcode == ONIC_MBOX_OP_PROGRAM_MAC_TABLE) {
+		dev_info(&priv->pdev->dev,
+			"PF mbox MAC table programmed: func_id=%u entry=%u qbase=%u qmax=%u mac=%pM\n",
+			resp.data.mac_tbl_resp.func_id,
+			resp.data.mac_tbl_resp.entry,
+			resp.data.mac_tbl_resp.qbase,
+			resp.data.mac_tbl_resp.qmax,
+			resp.data.mac_tbl_resp.mac);
+	} else if (req.hdr.opcode == ONIC_MBOX_OP_CLEAR_MAC_TABLE) {
+		dev_info(&priv->pdev->dev,
+			"PF mbox MAC table cleared: func_id=%u entry=%u qbase=%u qmax=%u mac=%pM\n",
+			resp.data.mac_tbl_resp.func_id,
+			resp.data.mac_tbl_resp.entry,
+			resp.data.mac_tbl_resp.qbase,
+			resp.data.mac_tbl_resp.qmax,
+			resp.data.mac_tbl_resp.mac);
 	}
 
 	return 1;
@@ -645,5 +678,127 @@ int onic_pf_mbox_irq_init(struct onic_private *priv, u16 vector)
 
 
 	return 0;
+
 }
 
+static void onic_pf_mac_to_key(const u8 *mac, u32 *key_l, u32 *key_h)
+{
+	*key_l = ((u32)mac[0] << 24) |
+		 ((u32)mac[1] << 16) |
+		 ((u32)mac[2] << 8)  |
+		 mac[3];
+
+	*key_h = ((u32)mac[4] << 8) | mac[5];
+}
+
+static int onic_pf_program_mac_table(struct onic_private *priv,
+				     u32 entry, const u8 *mac,
+				     u16 qbase, u16 qrange)
+{
+	u32 data;
+	u32 key_l;
+	u32 key_h;
+
+	if (!is_valid_ether_addr(mac))
+		return -EINVAL;
+
+	data = ((u32)qrange << 16) | qbase;
+	onic_pf_mac_to_key(mac, &key_l, &key_h);
+
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_SET_ADDR, entry);
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_DATA, data);
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_KEY_ADDR_L, key_l);
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_KEY_ADDR_H, key_h);
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_KEY_MASK_L, 0xffffffff);
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_KEY_MASK_H, 0x0000ffff);
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_SET_CLR, ONIC_MAC_TABLE_SET);
+	wmb();
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_VLD, 0x1);
+
+	return 0;
+}
+
+static int onic_pf_mbox_program_mac_table(struct onic_private *priv,
+					  u16 src_func_id,
+					  const struct onic_mbox_msg *req,
+					  struct onic_mbox_msg *resp)
+{
+	struct onic_vf_resource *res;
+	u32 entry;
+	int err;
+
+	memset(resp, 0, sizeof(*resp));
+
+	resp->hdr.opcode = ONIC_MBOX_OP_PROGRAM_MAC_TABLE_RESP;
+	resp->hdr.status = ONIC_MBOX_STS_ERR;
+	resp->hdr.seq = req->hdr.seq;
+	resp->hdr.len = sizeof(resp->data.mac_tbl_resp);
+
+	if (req->hdr.len != 0)
+		return -EINVAL;
+
+	res = onic_pf_mbox_find_vf_resource(priv, src_func_id);
+	if (!res)
+		return -ENOENT;
+
+	entry = 1 + res->vf_id;
+
+	err = onic_pf_program_mac_table(priv, entry, res->mac,
+					res->qbase, res->qmax);
+	if (err)
+		return err;
+
+	resp->hdr.status = ONIC_MBOX_STS_OK;
+	resp->data.mac_tbl_resp.func_id = res->func_id;
+	resp->data.mac_tbl_resp.entry = entry;
+	resp->data.mac_tbl_resp.qbase = res->qbase;
+	resp->data.mac_tbl_resp.qmax = res->qmax;
+	ether_addr_copy(resp->data.mac_tbl_resp.mac, res->mac);
+
+	return 0;
+}
+
+static void onic_pf_clear_mac_table(struct onic_private *priv, u32 entry)
+{
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_SET_ADDR, entry);
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_SET_CLR,
+		       ONIC_MAC_TABLE_CLEAR);
+	wmb();
+	onic_write_reg(&priv->hw, ONIC_MAC_TABLE_VLD, 0x1);
+}
+
+static int onic_pf_mbox_clear_mac_table(struct onic_private *priv,
+					u16 src_func_id,
+					const struct onic_mbox_msg *req,
+					struct onic_mbox_msg *resp)
+{
+	struct onic_vf_resource *res;
+	u32 entry;
+
+	memset(resp, 0, sizeof(*resp));
+
+	resp->hdr.opcode = ONIC_MBOX_OP_CLEAR_MAC_TABLE_RESP;
+	resp->hdr.status = ONIC_MBOX_STS_ERR;
+	resp->hdr.seq = req->hdr.seq;
+	resp->hdr.len = sizeof(resp->data.mac_tbl_resp);
+
+	if (req->hdr.len != 0)
+		return -EINVAL;
+
+	res = onic_pf_mbox_find_vf_resource(priv, src_func_id);
+	if (!res)
+		return -ENOENT;
+
+	entry = 1 + res->vf_id;
+
+	onic_pf_clear_mac_table(priv, entry);
+
+	resp->hdr.status = ONIC_MBOX_STS_OK;
+	resp->data.mac_tbl_resp.func_id = res->func_id;
+	resp->data.mac_tbl_resp.entry = entry;
+	resp->data.mac_tbl_resp.qbase = res->qbase;
+	resp->data.mac_tbl_resp.qmax = res->qmax;
+	ether_addr_copy(resp->data.mac_tbl_resp.mac, res->mac);
+
+	return 0;
+}

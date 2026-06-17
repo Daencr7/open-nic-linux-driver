@@ -25,4 +25,7 @@ int onic_vf_mbox_init_rx_queue(struct onic_private *priv, u16 local_qid,
 			       u16 vector);
 
 int onic_vf_mbox_clear_rx_queue(struct onic_private *priv, u16 local_qid);
+
+int onic_vf_mbox_program_mac_table(struct onic_private *priv);
+int onic_vf_mbox_clear_mac_table(struct onic_private *priv);
 #endif /* _ONIC_VF_MBOX_H_ */

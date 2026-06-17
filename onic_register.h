@@ -270,5 +270,21 @@ static inline void onic_write_reg(struct onic_hardware *hw, u32 offset, u32 val)
 #define INDIRECTION_TABLE_SIZE            0x80
 #define ONIC_EN_RSS_KEY_SIZE	  			    40
 
+/* MAC TABLE*/
+/***** MAC table registers *****/
+#define ONIC_MAC_TABLE_BASE             0x1000
+
+#define ONIC_MAC_TABLE_SET_ADDR         (ONIC_MAC_TABLE_BASE + 0x004)
+#define ONIC_MAC_TABLE_DATA             (ONIC_MAC_TABLE_BASE + 0x0A8)
+#define ONIC_MAC_TABLE_KEY_ADDR_L       (ONIC_MAC_TABLE_BASE + 0x018)
+#define ONIC_MAC_TABLE_KEY_ADDR_H       (ONIC_MAC_TABLE_BASE + 0x01C)
+#define ONIC_MAC_TABLE_KEY_MASK_L       (ONIC_MAC_TABLE_BASE + 0x068)
+#define ONIC_MAC_TABLE_KEY_MASK_H       (ONIC_MAC_TABLE_BASE + 0x06C)
+#define ONIC_MAC_TABLE_SET_CLR          (ONIC_MAC_TABLE_BASE + 0x0BC)
+#define ONIC_MAC_TABLE_TABLE_ID         (ONIC_MAC_TABLE_BASE + 0x0C0)
+#define ONIC_MAC_TABLE_VLD              (ONIC_MAC_TABLE_BASE + 0x0C4)
+
+#define ONIC_MAC_TABLE_SET              0x0
+#define ONIC_MAC_TABLE_CLEAR            0x1
 
 #endif

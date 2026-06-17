@@ -2,7 +2,7 @@
 #define __ONIC_MBOX_H__
 					
 #include <linux/types.h>
-
+#include <linux/if_ether.h>
 #define ONIC_MBOX_MSG_SIZE             128
 #define ONIC_MBOX_MAX_PAYLOAD          112
 
@@ -16,6 +16,10 @@
 #define ONIC_MBOX_OP_RX_QUEUE_INIT_RESP  	0x08
 #define ONIC_MBOX_OP_RX_QUEUE_CLEAR      	0x09
 #define ONIC_MBOX_OP_RX_QUEUE_CLEAR_RESP 	0x0a
+#define ONIC_MBOX_OP_PROGRAM_MAC_TABLE      0x0b
+#define ONIC_MBOX_OP_PROGRAM_MAC_TABLE_RESP 0x0c
+#define ONIC_MBOX_OP_CLEAR_MAC_TABLE        0x0d
+#define ONIC_MBOX_OP_CLEAR_MAC_TABLE_RESP   0x0e
 
 #define ONIC_MBOX_STS_OK               0x00
 #define ONIC_MBOX_STS_ERR              0x01
@@ -76,7 +80,16 @@ struct onic_mbox_rxq_resp {
 	u32 global_qid;
 	u32 rsvd;
 };
-	
+
+struct onic_mbox_mac_table_resp {
+	u32 func_id;
+	u32 entry;
+	u32 qbase;
+	u32 qmax;
+	u8 mac[ETH_ALEN];
+	u8 rsvd[2];
+};
+
 struct onic_mbox_msg {
 	struct onic_mbox_hdr hdr;
 
@@ -88,6 +101,7 @@ struct onic_mbox_msg {
 		struct onic_mbox_rxq_init rxq_init;
 		struct onic_mbox_rxq_clear rxq_clear;
 		struct onic_mbox_rxq_resp rxq_resp;
+		struct onic_mbox_mac_table_resp mac_tbl_resp;
 		u8 raw[ONIC_MBOX_MAX_PAYLOAD];
 	} data;
 };

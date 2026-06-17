@@ -84,7 +84,10 @@ static void onic_vf_set_tx_head(struct onic_private *priv, u16 qid, u16 head)
 
 	onic_vf_write_bar0(priv, offset, val);
 	// rb = onic_vf_read_bar0(priv, offset);
+<<<<<<< HEAD
 
+=======
+>>>>>>> 043524b (add mac)
 	// dev_info(&priv->pdev->dev,
 	// 	 "VF TX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
 	// 	 qid, offset, head, val, rb);
@@ -98,7 +101,10 @@ static void onic_vf_set_rx_head(struct onic_private *priv, u16 qid, u16 head)
 
 	onic_vf_write_bar0(priv, offset, val);
 	// rb = onic_vf_read_bar0(priv, offset);
+<<<<<<< HEAD
 
+=======
+>>>>>>> 043524b (add mac)
 	// dev_info(&priv->pdev->dev,
 	// 	 "VF RX doorbell write: qid=%u offset=0x%x pidx=%u val=0x%08x rb=0x%08x\n",
 	// 	 qid, offset, head, val, rb);
@@ -776,7 +782,11 @@ static int onic_vf_init_rx_ring(struct onic_private *priv, u16 qid)
 		goto err_free_irq;
 
 	// q->desc_ring.next_to_use = min_t(u16, ONIC_VF_RX_DESC_STEP,
+<<<<<<< HEAD
 	// 				 onic_vf_ring_real_count(&q->desc_ring));
+=======
+					//  onic_vf_ring_real_count(&q->desc_ring));
+>>>>>>> 043524b (add mac)
 	q->desc_ring.next_to_use = onic_vf_ring_real_count(&q->desc_ring);
 
 	dma_wmb();
