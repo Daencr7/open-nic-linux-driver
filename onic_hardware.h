@@ -22,6 +22,10 @@
 #define ONIC_MAX_CMACS			2
 #define ONIC_CMAC_CORE_VERSION		0x00000301
 
+#define ONIC_VF_CMPL_COUNTER_IDX 0
+#define ONIC_VF_CMPL_TIMER_IDX   0
+#define ONIC_VF_CMPL_TRIG_MODE   5
+
 struct onic_hardware {
     int RS_FEC;
 	unsigned long qdma;
