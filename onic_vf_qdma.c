@@ -963,16 +963,12 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 
 	ring = &q->ring;
 
-	// onic_vf_tx_clean(q);
+	onic_vf_tx_clean(q);
 
-	// if (onic_vf_ring_full(ring))
-	// 	return NETDEV_TX_BUSY;
 	if (unlikely(onic_vf_ring_full(ring))) {
 		onic_vf_tx_clean(q);
 		if (onic_vf_ring_full(ring))
 			return NETDEV_TX_BUSY;
-	} else if ((ring->next_to_use & 0x3f) == 0) {
-		onic_vf_tx_clean(q);
 	}
 
 	err = skb_put_padto(skb, ETH_ZLEN);
@@ -1018,9 +1014,21 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 
 	onic_vf_ring_increment_head(ring);
 
-	if (onic_vf_ring_full(ring) || !netdev_xmit_more()) {
-		dma_wmb();
-		onic_vf_set_tx_head(priv, qid, ring->next_to_use);
+	dma_wmb();
+	onic_vf_set_tx_head(priv, qid, ring->next_to_use);
+	onic_vf_tx_clean(q);
+
+	// if (onic_vf_ring_full(ring) || !netdev_xmit_more()) {
+	// 	dma_wmb();
+	// 	onic_vf_set_tx_head(priv, qid, ring->next_to_use);
+		// {
+		// int i;
+
+		// 	for (i = 0; i < priv->num_rx_queues; i++) {
+		// 		if (priv->rx_queue[i])
+		// 			napi_schedule(&priv->rx_queue[i]->napi);
+		// 	}
+		// }
 		// onic_vf_set_tx_head(priv, onic_vf_global_qid(priv, qid),
 		    // ring->next_to_use);
 		// onic_vf_schedule_rx_poll(priv);
@@ -1041,7 +1049,7 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 		// 	// 	qid, onic_vf_global_qid(priv, qid), ring->next_to_use,
 		// 	// 	ring->next_to_clean, wb.cidx, skb->len);
 		// }
-	}
+	// }
 
 	return NETDEV_TX_OK;
 }
