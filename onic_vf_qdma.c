@@ -1014,9 +1014,17 @@ netdev_tx_t onic_vf_qdma_xmit_frame(struct sk_buff *skb,
 
 	onic_vf_ring_increment_head(ring);
 
-	dma_wmb();
-	onic_vf_set_tx_head(priv, qid, ring->next_to_use);
-	onic_vf_tx_clean(q);
+
+	if ((ring->next_to_use & 0x7) == 0 || !netdev_xmit_more() ||
+		onic_vf_ring_full(ring)) {
+		dma_wmb();
+		onic_vf_set_tx_head(priv, qid, ring->next_to_use);
+		onic_vf_tx_clean(q);
+	}
+
+	// dma_wmb();
+	// onic_vf_set_tx_head(priv, qid, ring->next_to_use);
+	// onic_vf_tx_clean(q);
 
 	// if (onic_vf_ring_full(ring) || !netdev_xmit_more()) {
 	// 	dma_wmb();
