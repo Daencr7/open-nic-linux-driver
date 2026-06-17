@@ -24,7 +24,7 @@
 
 #define ONIC_VF_CMPL_COUNTER_IDX 0
 #define ONIC_VF_CMPL_TIMER_IDX   0
-#define ONIC_VF_CMPL_TRIG_MODE   5
+#define ONIC_VF_CMPL_TRIG_MODE   1
 
 struct onic_hardware {
     int RS_FEC;

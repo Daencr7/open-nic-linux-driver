@@ -511,7 +511,7 @@ int onic_qdma_init_rx_queue(unsigned long qdma, u16 qid,
 	memset(&cmpl_ctxt, 0, sizeof(struct qdma_cmpl_ctxt));
 	cmpl_ctxt.stat_en = 1;
 	cmpl_ctxt.intr_en = 1;
-	cmpl_ctxt.trig_mode = 0x5;
+	cmpl_ctxt.trig_mode = ONIC_VF_CMPL_TRIG_MODE;
 	cmpl_ctxt.func_id = qdev->func_id;
 	cmpl_ctxt.counter_idx = ONIC_VF_CMPL_COUNTER_IDX;
 	cmpl_ctxt.timer_idx = ONIC_VF_CMPL_TIMER_IDX;
@@ -647,7 +647,7 @@ static void onic_qdma_set_cmpl_cidx(unsigned long qdma, u16 qid, u16 cidx,
 void onic_set_completion_tail(unsigned long qdma, u16 qid, u16 tail, u8 irq_arm)
 {
 	struct qdma_dev *qdev = (struct qdma_dev *)qdma;
-	u8 trig_mode = 5; // trigger from: user, count, or timer
+	u8 trig_mode = ONIC_VF_CMPL_TRIG_MODE; // trigger from: user, count, or timer
 	u8 stat_en = 1;  // enabled is necessary for getting proper completion_status, e.g. for knowing pidx
 	bool debug = 0;
 	if (debug) dev_info(&qdev->pdev->dev, "onic_set_completion_tail (qid:%u, tail:%u, irq_arm:%u)", qid, tail, irq_arm);
