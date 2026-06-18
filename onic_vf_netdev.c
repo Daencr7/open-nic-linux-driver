@@ -59,7 +59,7 @@ int onic_vf_open_netdev(struct net_device *netdev)
 {
     struct onic_private *priv = netdev_priv(netdev);
     int err;
-
+    netdev_info(netdev, "onic_vf_open\n");
     err = onic_vf_rings_init(priv);
     if (err)
         return err;
@@ -76,7 +76,7 @@ int onic_vf_stop_netdev(struct net_device *netdev)
 {
 	struct onic_private *priv = netdev_priv(netdev);
 
-	netdev_info(netdev, "onic_vf_stop called\n");
+	netdev_info(netdev, "onic_vf_stop\n");
 
 	netif_carrier_off(netdev);
 	netif_tx_disable(netdev);

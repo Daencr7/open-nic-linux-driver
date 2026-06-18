@@ -227,7 +227,7 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 	// Chờ response với timeout, xảy ra nếu VF nhận được interrupt response
 	// và thread gọi complete(&priv->vf_hw.mbox_done) trong onic_vf_mbox_irq_thread
 	timeout = wait_for_completion_timeout(&vf_hw->mbox_done,
-					      msecs_to_jiffies(10000));
+					      msecs_to_jiffies(1000));
 	// if (!timeout) {
 	// 	err = -ETIMEDOUT;
 	// 	goto out_unlock;
@@ -236,11 +236,11 @@ int onic_vf_mbox_get_queue_resource(struct onic_private *priv)
 	if (!timeout) {
 		status = onic_vf_read_bar0(priv, QDMA_VF_MBOX_STS);
 
-		dev_err(&priv->pdev->dev,
-			"VF mailbox timeout: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
-			status,
-			onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
-			onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
+		// dev_err(&priv->pdev->dev,
+		// 	"VF mailbox timeout: sts=0x%08x vec=0x%08x ctrl=0x%08x\n",
+		// 	status,
+		// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_VEC),
+		// 	onic_vf_read_bar0(priv, QDMA_VF_MBOX_INTR_CTRL));
 
 		/*
 		* Bring-up fallback: inspect a response that reached VF inbox
@@ -381,11 +381,11 @@ validate_response:
 		goto out_unlock;
 	}
 
-	dev_info(&priv->pdev->dev,
-		 "VF TXQ context ready: func_id=%u local_qid=%u global_qid=%u\n",
-		 resp->data.txq_resp.func_id,
-		 resp->data.txq_resp.local_qid,
-		 resp->data.txq_resp.global_qid);
+	// dev_info(&priv->pdev->dev,
+	// 	 "VF TXQ context ready: func_id=%u local_qid=%u global_qid=%u\n",
+	// 	 resp->data.txq_resp.func_id,
+	// 	 resp->data.txq_resp.local_qid,
+	// 	 resp->data.txq_resp.global_qid);
 
 out_unlock:
 	mutex_unlock(&vf_hw->mbox_lock);
@@ -458,11 +458,11 @@ validate_response:
 		goto out_unlock;
 	}
 
-	dev_info(&priv->pdev->dev,
-		 "VF TXQ context cleared: func_id=%u local_qid=%u global_qid=%u\n",
-		 resp->data.txq_resp.func_id,
-		 resp->data.txq_resp.local_qid,
-		 resp->data.txq_resp.global_qid);
+	// dev_info(&priv->pdev->dev,
+	// 	 "VF TXQ context cleared: func_id=%u local_qid=%u global_qid=%u\n",
+	// 	 resp->data.txq_resp.func_id,
+	// 	 resp->data.txq_resp.local_qid,
+	// 	 resp->data.txq_resp.global_qid);
 
 out_unlock:
 	mutex_unlock(&vf_hw->mbox_lock);
@@ -554,19 +554,19 @@ validate_response:
 	    resp->hdr.status != ONIC_MBOX_STS_OK ||
 	    resp->hdr.len != sizeof(resp->data.rxq_resp) ||
 	    resp->data.rxq_resp.local_qid != local_qid) {
-		dev_err(&priv->pdev->dev,
-			"VF RXQ init bad response: qid=%u opcode=%u status=%u seq=%u/%u len=%u\n",
-			local_qid, resp->hdr.opcode, resp->hdr.status,
-			resp->hdr.seq, req.hdr.seq, resp->hdr.len);
+		// dev_err(&priv->pdev->dev,
+		// 	"VF RXQ init bad response: qid=%u opcode=%u status=%u seq=%u/%u len=%u\n",
+		// 	local_qid, resp->hdr.opcode, resp->hdr.status,
+		// 	resp->hdr.seq, req.hdr.seq, resp->hdr.len);
 		err = -EPROTO;
 		goto out_unlock;
 	}
 
-	dev_info(&priv->pdev->dev,
-		 "VF RXQ context ready: func_id=%u local_qid=%u global_qid=%u\n",
-		 resp->data.rxq_resp.func_id,
-		 resp->data.rxq_resp.local_qid,
-		 resp->data.rxq_resp.global_qid);
+	// dev_info(&priv->pdev->dev,
+	// 	 "VF RXQ context ready: func_id=%u local_qid=%u global_qid=%u\n",
+	// 	 resp->data.rxq_resp.func_id,
+	// 	 resp->data.rxq_resp.local_qid,
+	// 	 resp->data.rxq_resp.global_qid);
 
 out_unlock:
 	mutex_unlock(&vf_hw->mbox_lock);
@@ -637,11 +637,11 @@ validate_response:
 		goto out_unlock;
 	}
 
-	dev_info(&priv->pdev->dev,
-		 "VF RXQ context cleared: func_id=%u local_qid=%u global_qid=%u\n",
-		 resp->data.rxq_resp.func_id,
-		 resp->data.rxq_resp.local_qid,
-		 resp->data.rxq_resp.global_qid);
+	// dev_info(&priv->pdev->dev,
+	// 	 "VF RXQ context cleared: func_id=%u local_qid=%u global_qid=%u\n",
+	// 	 resp->data.rxq_resp.func_id,
+	// 	 resp->data.rxq_resp.local_qid,
+	// 	 resp->data.rxq_resp.global_qid);
 
 out_unlock:
 	mutex_unlock(&vf_hw->mbox_lock);
